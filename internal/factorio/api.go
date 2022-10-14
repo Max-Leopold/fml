@@ -1,8 +1,7 @@
-package factorio_api
+package factorio
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
