@@ -12,10 +12,10 @@ type ServerConfig struct {
 }
 
 func GetServerConfig(path string) ServerConfig {
-	return readConfig(path)
+	return readServerConfig(path)
 }
 
-func readConfig(path string) ServerConfig {
+func readServerConfig(path string) ServerConfig {
 	file, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
