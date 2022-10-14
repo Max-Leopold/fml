@@ -77,7 +77,7 @@ func GetMod(name string) Mod {
 		log.Fatal(err)
 	}
 
-	return parseMod(body)
+	return parseMod(&body)
 }
 
 func GetMods(names []string) []Mod {
@@ -105,19 +105,19 @@ func GetMods(names []string) []Mod {
 		log.Fatal(err)
 	}
 
-	return parseModList(body).Mods
+	return parseModList(&body).Mods
 }
 
-func parseMod(modJson []byte) Mod {
+func parseMod(modJson *[]byte) Mod {
 	var mod Mod
-	json.Unmarshal(modJson, &mod)
+	json.Unmarshal(*modJson, &mod)
 
 	return mod
 }
 
-func parseModList(modListJson []byte) modList {
+func parseModList(modListJson *[]byte) modList {
 	var modList modList
-	json.Unmarshal(modListJson, &modList)
+	json.Unmarshal(*modListJson, &modList)
 
 	return modList
 }
