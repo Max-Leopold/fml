@@ -60,7 +60,11 @@ type Tag struct {
 	Name string `json:"name,omitempty"`
 }
 
-func GetMod(name string) (Mod) {
+type modList struct {
+	Mods []Mod `json:"results"`
+}
+
+func GetMod(name string) Mod {
 	res, err := http.Get(ApiUrl + "/" + name + "/full")
 	if err != nil {
 		log.Fatal(err)
@@ -76,16 +80,44 @@ func GetMod(name string) (Mod) {
 	return parseMod(body)
 }
 
-func parseMod(modJson []byte) (Mod) {
+func GetMods(names []string) []Mod {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", ApiUrl, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	query := req.URL.Query()
+	for _, name := range names {
+		query.Add("namelist", name)
+	}
+	req.URL.RawPath = query.Encode()
+
+	res, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return parseModList(body).Mods
+}
+
+func parseMod(modJson []byte) Mod {
 	var mod Mod
 	json.Unmarshal(modJson, &mod)
 
 	return mod
 }
 
-func parseMods(modArrayJson []byte) ([]Mod) {
-	var mods []Mod
-	json.Unmarshal(modArrayJson, &mods)
+func parseModList(modListJson []byte) modList {
+	var modList modList
+	json.Unmarshal(modListJson, &modList)
 
-	return mods
+	return modList
 }
