@@ -2,13 +2,14 @@ package factorio_api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
 )
 
-const ApiUrl = "https://mods.factorio.com/api/mods/"
+const ApiUrl = "https://mods.factorio.com/api/mods"
 
 type Mod struct {
 	Category       string     `json:"category,omitempty"`
@@ -61,10 +62,12 @@ type Tag struct {
 }
 
 func GetMod(name string) (Mod) {
-	res, err := http.Get(ApiUrl + name + "/full")
+	res, err := http.Get(ApiUrl + "/" + name + "/full")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
