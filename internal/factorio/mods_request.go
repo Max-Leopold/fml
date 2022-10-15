@@ -71,7 +71,7 @@ func NewModsRequest() modsRequest {
 	}
 }
 
-func (r *modsRequest) execute() []Mod {
+func (r *modsRequest) Execute() []Mod {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", ApiUrl+"api/mods", nil)
 	if err != nil {

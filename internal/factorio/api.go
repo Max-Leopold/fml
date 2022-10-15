@@ -102,7 +102,9 @@ type modList struct {
 
 func SearchMods(query string) []Mod {
 	// TODO This should be cached somehow
-	mods := getAllMods()
+	req := NewModsRequest()
+	req.PageSize = "max"
+	mods := req.Execute()
 
 	matchingMods := mods[:0]
 	for _, mod := range mods {
@@ -127,7 +129,7 @@ func GetModsFromConfig(modConfig ModConfig) []Mod {
 	req := NewModsRequest()
 	req.NameList = &names
 
-	return req.execute()
+	return req.Execute()
 }
 
 func DownloadModsFromConfig(downloadDirectory string, modConfig ModConfig, serverConfig ServerConfig) {
@@ -176,21 +178,6 @@ func DownloadModsFromConfig(downloadDirectory string, modConfig ModConfig, serve
 			log.Fatal(err)
 		}
 	}
-}
-
-func getAllMods() []Mod {
-	res, err := http.Get(ApiUrl + "/api/mods?page_size=max")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return parseModList(&body).Mods
 }
 
 func parseMod(modJson *[]byte) Mod {
