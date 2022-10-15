@@ -7,18 +7,6 @@ import (
 	"strconv"
 )
 
-type modsRequestSortType string
-
-var ModsRequestSort = struct {
-	NAME       modsRequestSortType
-	CREATED_AT modsRequestSortType
-	UPDATED_AT modsRequestSortType
-}{
-	NAME:       "name",
-	CREATED_AT: "create_at",
-	UPDATED_AT: "updated:at",
-}
-
 type modsRequestSortOrderType string
 
 var ModsRequestSortOrder = struct {
@@ -55,7 +43,7 @@ type modsRequest struct {
 	HideDeprecated bool
 	Page           int
 	PageSize       string
-	Sort           modsRequestSortType
+	Sort           By
 	NameList       *[]string
 	Version        versionType
 }
@@ -65,7 +53,7 @@ func NewModsRequest() modsRequest {
 		HideDeprecated: true,
 		Page:           0,
 		PageSize:       "20",
-		Sort:           ModsRequestSort.NAME,
+		Sort:           func(m1, m2 *Mod) bool { return m1.DownloadsCount > m2.DownloadsCount },
 		NameList:       nil,
 		Version:        Version.V1_1,
 	}
@@ -82,7 +70,6 @@ func (r *modsRequest) Execute() []Mod {
 	query.Add("hide_deprecated", strconv.FormatBool(r.HideDeprecated))
 	query.Add("page", strconv.Itoa(r.Page))
 	query.Add("page_size", r.PageSize)
-	query.Add("sort", string(r.Sort))
 	query.Add("version", string(r.Version))
 	if r.NameList != nil {
 		for _, name := range *r.NameList {
@@ -103,5 +90,8 @@ func (r *modsRequest) Execute() []Mod {
 		log.Fatal(err)
 	}
 
-	return parseModList(&body).Mods
+	mods := parseModList(&body).Mods
+	By(r.Sort).Sort(mods)
+
+	return mods
 }
