@@ -2,35 +2,40 @@ package factorio
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 )
 
-const ApiUrl = "https://mods.factorio.com/api/mods"
+const ApiUrl = "https://mods.factorio.com/"
 
 type Mod struct {
-	Category       string     `json:"category,omitempty"`
-	Changelog      string     `json:"changelog,omitempty"`
-	CreatedAt      time.Time  `json:"created_at,omitempty"`
-	Description    string     `json:"description,omitempty"`
-	DownloadsCount int        `json:"downloads_count,omitempty"`
-	Faq            string     `json:"faq,omitempty"`
-	GithubPath     string     `json:"github_path,omitempty"`
-	Homepage       string     `json:"homepage,omitempty"`
-	Images         []Images   `json:"images,omitempty"`
-	License        License    `json:"license,omitempty"`
-	Name           string     `json:"name,omitempty"`
-	Owner          string     `json:"owner,omitempty"`
-	Releases       []Releases `json:"releases,omitempty"`
-	Score          float64    `json:"score,omitempty"`
-	SourceURL      string     `json:"source_url,omitempty"`
-	Summary        string     `json:"summary,omitempty"`
-	Tag            Tag        `json:"tag,omitempty"`
-	Thumbnail      string     `json:"thumbnail,omitempty"`
-	Title          string     `json:"title,omitempty"`
-	UpdatedAt      time.Time  `json:"updated_at,omitempty"`
+	Category       string    `json:"category,omitempty"`
+	Changelog      string    `json:"changelog,omitempty"`
+	CreatedAt      time.Time `json:"created_at,omitempty"`
+	Description    string    `json:"description,omitempty"`
+	DownloadsCount int       `json:"downloads_count,omitempty"`
+	Faq            string    `json:"faq,omitempty"`
+	GithubPath     string    `json:"github_path,omitempty"`
+	Homepage       string    `json:"homepage,omitempty"`
+	Images         []Images  `json:"images,omitempty"`
+	License        License   `json:"license,omitempty"`
+	Name           string    `json:"name,omitempty"`
+	Owner          string    `json:"owner,omitempty"`
+	Releases       []Release `json:"releases,omitempty"`
+	LatestRelease  *Release  `json:"latest_release,omitempty"`
+	Score          float64   `json:"score,omitempty"`
+	SourceURL      string    `json:"source_url,omitempty"`
+	Summary        string    `json:"summary,omitempty"`
+	Tag            Tag       `json:"tag,omitempty"`
+	Thumbnail      string    `json:"thumbnail,omitempty"`
+	Title          string    `json:"title,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at,omitempty"`
 }
 type Images struct {
 	ID        string `json:"id,omitempty"`
@@ -48,7 +53,7 @@ type InfoJSON struct {
 	Dependencies    []string `json:"dependencies,omitempty"`
 	FactorioVersion string   `json:"factorio_version,omitempty"`
 }
-type Releases struct {
+type Release struct {
 	DownloadURL string    `json:"download_url,omitempty"`
 	FileName    string    `json:"file_name,omitempty"`
 	InfoJSON    InfoJSON  `json:"info_json,omitempty"`
@@ -60,12 +65,20 @@ type Tag struct {
 	Name string `json:"name,omitempty"`
 }
 
-type modList struct {
-	Mods []Mod `json:"results"`
+func (m *Mod) GetLatestRelease() Release {
+	if m.LatestRelease == nil {
+		if len(m.Releases) > 0 {
+			return m.Releases[len(m.Releases)-1]
+		}
+
+		return Release{}
+	}
+
+	return *m.LatestRelease
 }
 
 func GetMod(name string) Mod {
-	res, err := http.Get(ApiUrl + "/" + name + "/full")
+	res, err := http.Get(ApiUrl + "api/mods/" + name + "/full")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,9 +93,13 @@ func GetMod(name string) Mod {
 	return parseMod(&body)
 }
 
+type modList struct {
+	Mods []Mod `json:"results"`
+}
+
 func GetMods(names []string) []Mod {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", ApiUrl, nil)
+	req, err := http.NewRequest("GET", ApiUrl+"api/mods", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -91,7 +108,7 @@ func GetMods(names []string) []Mod {
 	for _, name := range names {
 		query.Add("namelist", name)
 	}
-	req.URL.RawPath = query.Encode()
+	req.URL.RawQuery = query.Encode()
 
 	res, err := client.Do(req)
 	if err != nil {
@@ -108,6 +125,63 @@ func GetMods(names []string) []Mod {
 	return parseModList(&body).Mods
 }
 
+func GetModsFromConfig(modConfig ModConfig) []Mod {
+	names := make([]string, len(modConfig.Mods))
+    for i := range modConfig.Mods {
+        names[i] = modConfig.Mods[i].Name
+    }
+
+	return GetMods(names)
+}
+
+func DownloadModsFromConfig(downloadDirectory string, modConfig ModConfig, serverConfig ServerConfig) {
+	client := &http.Client{}
+	if _, err := os.Stat(downloadDirectory); os.IsNotExist(err) {
+		err := os.Mkdir(downloadDirectory, os.ModePerm)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	for _, mod := range GetModsFromConfig(modConfig) {
+		fileName := downloadDirectory + "/" + mod.GetLatestRelease().FileName
+
+		fmt.Println("Downloading " + mod.Name + " to " + fileName)
+		if _, err := os.Stat(fileName); err == nil {
+			fmt.Println(mod.Name + " already exists -  skipping")
+			continue
+		}
+
+		req, err := http.NewRequest("GET", ApiUrl+"/"+mod.GetLatestRelease().DownloadURL, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		query := req.URL.Query()
+		query.Add("token", serverConfig.Token)
+		query.Add("username", serverConfig.Username)
+
+		req.URL.RawPath = query.Encode()
+
+		res, err := client.Do(req)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		out, err := os.Create(fileName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer out.Close()
+
+		_, err = io.Copy(out, res.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
 func parseMod(modJson *[]byte) Mod {
 	var mod Mod
 	json.Unmarshal(*modJson, &mod)
@@ -120,4 +194,17 @@ func parseModList(modListJson *[]byte) modList {
 	json.Unmarshal(*modListJson, &modList)
 
 	return modList
+}
+
+func deleteMod(downloadDirectory string, modName string) {
+	files, err := filepath.Glob(downloadDirectory + modName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range files {
+		if err := os.Remove(file); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
