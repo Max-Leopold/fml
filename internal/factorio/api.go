@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
+
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 const ApiUrl = "https://mods.factorio.com/"
@@ -99,12 +102,13 @@ type modList struct {
 
 func GetMods(names []string) []Mod {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", ApiUrl+"api/mods", nil)
+	req, err := http.NewRequest("GET", ApiUrl + "api/mods", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	query := req.URL.Query()
+	query.Add("page_size", "max")
 	for _, name := range names {
 		query.Add("namelist", name)
 	}
@@ -125,11 +129,29 @@ func GetMods(names []string) []Mod {
 	return parseModList(&body).Mods
 }
 
+func SearchMods(query string) []Mod {
+	// TODO This should be cached somehow
+	mods := getAllMods()
+
+	matchingMods := mods[:0]
+	for _, mod := range mods {
+		match := fuzzy.MatchNormalizedFold(query, mod.Name)
+		if match {
+			matchingMods = append(matchingMods, mod)
+		}
+	}
+	sort.Slice(matchingMods, func(i, j int) bool {
+		return matchingMods[i].DownloadsCount > matchingMods[j].DownloadsCount
+	})
+
+	return matchingMods
+}
+
 func GetModsFromConfig(modConfig ModConfig) []Mod {
 	names := make([]string, len(modConfig.Mods))
-    for i := range modConfig.Mods {
-        names[i] = modConfig.Mods[i].Name
-    }
+	for i := range modConfig.Mods {
+		names[i] = modConfig.Mods[i].Name
+	}
 
 	return GetMods(names)
 }
@@ -180,6 +202,21 @@ func DownloadModsFromConfig(downloadDirectory string, modConfig ModConfig, serve
 			log.Fatal(err)
 		}
 	}
+}
+
+func getAllMods() []Mod {
+	res, err := http.Get(ApiUrl + "/api/mods?page_size=max")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return parseModList(&body).Mods
 }
 
 func parseMod(modJson *[]byte) Mod {
