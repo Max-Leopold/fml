@@ -1,11 +1,17 @@
 package modList
 
 import (
+	"log"
+	"path/filepath"
+
 	"github.com/Max-Leopold/factorio-mod-loader/internal/factorio"
 	"github.com/charmbracelet/bubbles/list"
 )
 
-type item factorio.Mod
+type item struct {
+	factorio.Mod
+	Enabled bool
+}
 
 func (i item) FilterValue() string { return i.Title }
 
@@ -26,9 +32,23 @@ func NewBubbleMod() bubbleMod {
 }
 
 func modsToBubbleMods(mods []factorio.Mod) []list.Item {
+	modConfigPath, err := filepath.Abs("mod-list.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	config := factorio.GetModConfig(modConfigPath)
+	configMap := make(map[string]bool)
+	for i := 0; i < len(config.Mods); i +=2 {
+		configMap[config.Mods[i].Name] = config.Mods[i].Enabled
+	}
+
 	items := make([]list.Item, len(mods))
 	for i, v := range mods {
-		items[i] = item(v)
+		_, enabled := configMap[v.Name]
+		items[i] = item{
+			Mod: v,
+			Enabled: enabled,
+		}
 	}
 
 	return items
