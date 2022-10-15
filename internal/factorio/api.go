@@ -100,35 +100,6 @@ type modList struct {
 	Mods []Mod `json:"results"`
 }
 
-func GetMods(names []string) []Mod {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", ApiUrl + "api/mods", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	query := req.URL.Query()
-	query.Add("page_size", "max")
-	for _, name := range names {
-		query.Add("namelist", name)
-	}
-	req.URL.RawQuery = query.Encode()
-
-	res, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return parseModList(&body).Mods
-}
-
 func SearchMods(query string) []Mod {
 	// TODO This should be cached somehow
 	mods := getAllMods()
@@ -153,7 +124,10 @@ func GetModsFromConfig(modConfig ModConfig) []Mod {
 		names[i] = modConfig.Mods[i].Name
 	}
 
-	return GetMods(names)
+	req := NewModsRequest()
+	req.NameList = &names
+
+	return req.execute()
 }
 
 func DownloadModsFromConfig(downloadDirectory string, modConfig ModConfig, serverConfig ServerConfig) {
