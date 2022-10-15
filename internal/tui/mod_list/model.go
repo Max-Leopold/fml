@@ -38,7 +38,7 @@ func modsToBubbleMods(mods []factorio.Mod) []list.Item {
 	}
 	config := factorio.GetModConfig(modConfigPath)
 	configMap := make(map[string]bool)
-	for i := 0; i < len(config.Mods); i +=2 {
+	for i := 0; i < len(config.Mods); i += 1 {
 		configMap[config.Mods[i].Name] = config.Mods[i].Enabled
 	}
 
