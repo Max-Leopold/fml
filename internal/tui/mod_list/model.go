@@ -14,6 +14,9 @@ type item struct {
 }
 
 func (i item) FilterValue() string { return i.Title }
+func (i *item) ToggleEnable() {
+	i.Enabled = !i.Enabled
+}
 
 type bubbleMod struct {
 	list list.Model
