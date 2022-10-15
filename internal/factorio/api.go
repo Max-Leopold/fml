@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -78,22 +77,6 @@ func (m *Mod) GetLatestRelease() Release {
 	}
 
 	return *m.LatestRelease
-}
-
-func GetMod(name string) Mod {
-	res, err := http.Get(ApiUrl + "api/mods/" + name + "/full")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return parseMod(&body)
 }
 
 type modList struct {
