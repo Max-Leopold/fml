@@ -3,15 +3,21 @@ package modList
 import (
 	"fmt"
 	"io"
+
 	"github.com/Max-Leopold/factorio-mod-loader/internal/tui"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/reflow/truncate"
 )
 
 type itemDelegate struct{}
 
-func (d itemDelegate) Height() int                               { return 1 }
-func (d itemDelegate) Spacing() int                              { return 0 }
+func newItemDelegate() itemDelegate {
+	return itemDelegate{}
+}
+
+func (d itemDelegate) Height() int  { return 1 }
+func (d itemDelegate) Spacing() int { return 0 }
 func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -43,18 +49,29 @@ func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
 }
 
 func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	item, ok := listItem.(item)
-	if !ok {
+	var (
+		mod item
+		title string
+	)
+
+	if i, ok := listItem.(item); ok {
+		mod = i
+		title = i.Title
+	} else {
 		return
 	}
 
-	line := item.Title
-
-	if index == m.Index() {
-		line = tui.ListCursor(line, item.Enabled)
-	} else {
-		line = tui.ListItem(line, item.Enabled)
+	if m.Width() <= 0 {
+		return
 	}
 
-	fmt.Fprint(w, line)
+	title = truncate.StringWithTail(mod.Title, uint(m.Width()), tui.Ellipsis)
+	if index == m.Index() {
+		title = tui.ListCursor(title, mod.Enabled)
+	} else {
+		title = tui.ListItem(title, mod.Enabled)
+	}
+
+	fmt.Fprintf(w, "%s", title)
+	return
 }

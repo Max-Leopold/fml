@@ -26,7 +26,7 @@ func NewBubbleMod() bubbleMod {
 	req := factorio.NewModsRequest()
 	req.PageSize = "max"
 	items := modsToBubbleMods(req.Execute())
-	list := list.New(items, itemDelegate{}, 0, 0)
+	list := list.New(items, newItemDelegate(), 0, 0)
 	list.Title = "Factorio Mods"
 
 	return bubbleMod{
@@ -49,7 +49,7 @@ func modsToBubbleMods(mods []factorio.Mod) []list.Item {
 	for i, v := range mods {
 		_, enabled := configMap[v.Name]
 		items[i] = item{
-			Mod: v,
+			Mod:     v,
 			Enabled: enabled,
 		}
 	}

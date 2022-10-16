@@ -2,6 +2,11 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
+const (
+	Bullet   = "•"
+	Ellipsis = "…"
+)
+
 var (
 	subtle    = lipgloss.AdaptiveColor{Light: "#D9DCCF", Dark: "#383838"}
 	highlight = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
@@ -37,4 +42,16 @@ var (
 		return left + lipgloss.NewStyle().
 			PaddingLeft(2).Render(line)
 	}
+
+	ViewPortTitle = func() lipgloss.Style {
+		b := lipgloss.RoundedBorder()
+		b.Right = "├"
+		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
+	}()
+
+	ViewPortInfo = func() lipgloss.Style {
+		b := lipgloss.RoundedBorder()
+		b.Left = "┤"
+		return ViewPortTitle.Copy().BorderStyle(b)
+	}()
 )
