@@ -11,10 +11,10 @@ func (b bubbleMod) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "ctrl+c", "q":
 			return b, tea.Quit
-	}
+		}
 	case tea.WindowSizeMsg:
 		h, v := docStyle.GetFrameSize()
-		b.list.SetSize(msg.Width-h, msg.Height-v)
+		b.list.SetSize(msg.Width/2-h, msg.Height-v)
 	}
 
 	var cmd tea.Cmd

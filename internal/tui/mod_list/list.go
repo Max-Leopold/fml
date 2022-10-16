@@ -5,24 +5,43 @@ import (
 	"io"
 
 	"github.com/Max-Leopold/factorio-mod-loader/internal/tui"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/reflow/truncate"
 )
 
-type itemDelegate struct{}
-
-func newItemDelegate() itemDelegate {
-	return itemDelegate{}
+type itemDelegate struct{
+	DelegateKeyMap delegateKeyMap
 }
 
+type delegateKeyMap struct {
+	enable key.Binding
+}
+
+func newItemDelegate() itemDelegate {
+	return itemDelegate{
+		DelegateKeyMap: *newItemDelegateKeyMap(),
+	}
+}
+
+func newItemDelegateKeyMap() *delegateKeyMap {
+	return &delegateKeyMap{
+		enable: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "enable"),
+		),
+	}
+}
+
+// Height, Spacing, Update and Render implement the list.ItemDelegate interface
 func (d itemDelegate) Height() int  { return 1 }
 func (d itemDelegate) Spacing() int { return 0 }
 func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter":
+		switch {
+		case key.Matches(msg, d.DelegateKeyMap.enable):
 			// We can't edit an item directly, we can only modify a copy of it.
 			// The workaround I used is to change the value on the copy and then replace the item
 			// at the original index with the copy.
@@ -74,4 +93,19 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 
 	fmt.Fprintf(w, "%s", title)
 	return
+}
+
+// ShortHelp and FullHelp implement the help.KeyMap interface
+func (d itemDelegate) ShortHelp() []key.Binding {
+	return []key.Binding{
+		d.DelegateKeyMap.enable,
+	}
+}
+
+func (d itemDelegate) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{
+			d.DelegateKeyMap.enable,
+		},
+	}
 }
