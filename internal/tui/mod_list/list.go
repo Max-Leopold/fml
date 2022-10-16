@@ -60,7 +60,13 @@ func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
 			}
 
 			selectedItem.ToggleEnable()
-			return l.SetItem(i, selectedItem)
+			var statusMessage string
+			if selectedItem.Enabled {
+				statusMessage = "Enabled " + selectedItem.Title
+			} else {
+				statusMessage = "Disabled " + selectedItem.Title
+			}
+			return tea.Batch(l.NewStatusMessage(statusMessage), l.SetItem(i, selectedItem))
 		}
 	}
 
