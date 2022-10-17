@@ -6,6 +6,7 @@ import (
 
 	"github.com/Max-Leopold/factorio-mod-loader/internal/factorio"
 	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type item struct {
@@ -13,10 +14,15 @@ type item struct {
 	Enabled bool
 }
 
+type replaceMsg *item
+
 func (i item) FilterValue() string { return i.Title }
-func (i *item) ToggleEnable() {
+func (i *item) ToggleEnable() tea.Msg {
 	i.Enabled = !i.Enabled
+
+	return replaceMsg(i)
 }
+
 
 type bubbleMod struct {
 	list list.Model

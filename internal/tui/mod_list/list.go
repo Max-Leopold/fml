@@ -38,39 +38,46 @@ func newItemDelegateKeyMap() *delegateKeyMap {
 func (d itemDelegate) Height() int  { return 1 }
 func (d itemDelegate) Spacing() int { return 0 }
 func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
+	case replaceMsg:
+		// We can't edit an item directly, we can only modify a copy of it.
+		// The workaround I used is to change the value on the copy and then replace the item
+		// at the original index with the copy.
+		// bubbles/list doesn't have the functionality to find the "actual" index of an item
+		// when filtering and only returns the index in the filtered list.
+		// So we have to find it ourselves, by iterating over all items to find the index of the
+		// selected item in the filtered list in the list of all items.
+		newItem := replaceMsg(msg)
+		allItems := l.Items()
+		var i int
+		for index, elem := range allItems {
+			if elem.(item).Name == newItem.Name {
+				i = index
+				break
+			}
+		}
+		cmd = tea.Batch(cmd, l.SetItem(i, *newItem))
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, d.DelegateKeyMap.enable):
-			// We can't edit an item directly, we can only modify a copy of it.
-			// The workaround I used is to change the value on the copy and then replace the item
-			// at the original index with the copy.
-			// bubbles/list doesn't have the functionality to find the "actual" index of an item
-			// when filtering and only returns the index in the filtered list.
-			// So we have to find it ourselves, by iterating over all items to find the index of the
-			// selected item in the filtered list in the list of all items.
+			// Toggle enable
 			selectedItem := l.SelectedItem().(item)
-			allItems := l.Items()
-			var i int
-			for index, elem := range allItems {
-				if elem.(item).Name == selectedItem.Name {
-					i = index
-					break
-				}
-			}
+			cmd = tea.Batch(cmd, selectedItem.ToggleEnable)
 
-			selectedItem.ToggleEnable()
+			// Show status message
 			var statusMessage string
 			if selectedItem.Enabled {
-				statusMessage = "Enabled " + selectedItem.Title
-			} else {
 				statusMessage = "Disabled " + selectedItem.Title
+			} else {
+				statusMessage = "Enabled " + selectedItem.Title
 			}
-			return tea.Batch(l.NewStatusMessage(statusMessage), l.SetItem(i, selectedItem))
+			cmd = tea.Batch(cmd, l.NewStatusMessage(statusMessage))
 		}
 	}
 
-	return nil
+	return cmd
 }
 
 func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
