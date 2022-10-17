@@ -14,13 +14,34 @@ type item struct {
 	Enabled bool
 }
 
-type replaceMsg *item
+type listReplaceMsg *item
+
+func createListReplaceMsg(item *item) tea.Cmd {
+	return func() tea.Msg {
+		return listReplaceMsg(item)
+	}
+}
+
+type statusListStatusMsg string
+
+func createListStatusMsg (status string) tea.Cmd {
+	return func() tea.Msg {
+		return statusListStatusMsg(status)
+	}
+}
 
 func (i item) FilterValue() string { return i.Title }
-func (i *item) ToggleEnable() tea.Msg {
+func (i *item) ToggleEnable() tea.Cmd {
 	i.Enabled = !i.Enabled
 
-	return replaceMsg(i)
+	var statusMessage string
+	if i.Enabled {
+		statusMessage = "Enabled " + i.Title
+	} else {
+		statusMessage = "Disabled " + i.Title
+	}
+
+	return tea.Batch(createListReplaceMsg(i), createListStatusMsg(statusMessage))
 }
 
 

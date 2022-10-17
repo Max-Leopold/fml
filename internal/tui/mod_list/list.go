@@ -41,7 +41,7 @@ func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case replaceMsg:
+	case listReplaceMsg:
 		// We can't edit an item directly, we can only modify a copy of it.
 		// The workaround I used is to change the value on the copy and then replace the item
 		// at the original index with the copy.
@@ -49,7 +49,7 @@ func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
 		// when filtering and only returns the index in the filtered list.
 		// So we have to find it ourselves, by iterating over all items to find the index of the
 		// selected item in the filtered list in the list of all items.
-		newItem := replaceMsg(msg)
+		newItem := listReplaceMsg(msg)
 		allItems := l.Items()
 		var i int
 		for index, elem := range allItems {
@@ -59,21 +59,14 @@ func (d itemDelegate) Update(msg tea.Msg, l *list.Model) tea.Cmd {
 			}
 		}
 		cmd = tea.Batch(cmd, l.SetItem(i, *newItem))
+	case statusListStatusMsg:
+		cmd = tea.Batch(cmd, l.NewStatusMessage(string(msg)))
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, d.DelegateKeyMap.enable):
 			// Toggle enable
 			selectedItem := l.SelectedItem().(item)
-			cmd = tea.Batch(cmd, selectedItem.ToggleEnable)
-
-			// Show status message
-			var statusMessage string
-			if selectedItem.Enabled {
-				statusMessage = "Disabled " + selectedItem.Title
-			} else {
-				statusMessage = "Enabled " + selectedItem.Title
-			}
-			cmd = tea.Batch(cmd, l.NewStatusMessage(statusMessage))
+			cmd = tea.Batch(cmd, selectedItem.ToggleEnable())
 		}
 	}
 
