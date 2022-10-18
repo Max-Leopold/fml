@@ -1,4 +1,4 @@
-package factorio
+package config
 
 import (
 	"encoding/json"
@@ -11,11 +11,11 @@ type ServerConfig struct {
 	Username string `json:"username"`
 }
 
-func GetServerConfig(path string) ServerConfig {
+func GetServerConfig(path string) *ServerConfig {
 	return readServerConfig(path)
 }
 
-func readServerConfig(path string) ServerConfig {
+func readServerConfig(path string) *ServerConfig {
 	file, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
@@ -24,5 +24,5 @@ func readServerConfig(path string) ServerConfig {
 	var config ServerConfig
 	json.Unmarshal([]byte(file), &config)
 
-	return config
+	return &config
 }

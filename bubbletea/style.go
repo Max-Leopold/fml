@@ -1,4 +1,5 @@
-package tui
+
+package bubbletea
 
 import "github.com/charmbracelet/lipgloss"
 

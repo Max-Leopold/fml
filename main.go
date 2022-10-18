@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Max-Leopold/factorio-mod-loader/internal/tui/mod_list"
+	modList "github.com/Max-Leopold/factorio-mod-loader/bubbletea/mod_list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -16,7 +16,7 @@ func main() {
 	}
 	defer f.Close()
 
-	p := tea.NewProgram(modList.NewBubbleMod() , tea.WithAltScreen())
+	p := tea.NewProgram(modList.NewBubbleMod(), tea.WithAltScreen())
 
 	if err := p.Start(); err != nil {
 		fmt.Println("Error running program:", err)

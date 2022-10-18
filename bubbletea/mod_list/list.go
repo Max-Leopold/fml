@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/Max-Leopold/factorio-mod-loader/internal/tui"
+	"github.com/Max-Leopold/factorio-mod-loader/bubbletea"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -90,11 +90,11 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 		return
 	}
 
-	title = truncate.StringWithTail(mod.Title, uint(m.Width()), tui.Ellipsis)
+	title = truncate.StringWithTail(mod.Title, uint(m.Width()), bubbletea.Ellipsis)
 	if index == m.Index() {
-		title = tui.ListCursor(title, mod.Enabled)
+		title = bubbletea.ListCursor(title, mod.Enabled)
 	} else {
-		title = tui.ListItem(title, mod.Enabled)
+		title = bubbletea.ListItem(title, mod.Enabled)
 	}
 
 	fmt.Fprintf(w, "%s", title)

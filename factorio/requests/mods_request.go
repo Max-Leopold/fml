@@ -1,11 +1,18 @@
-package factorio
+package requests
 
 import (
-	"io/ioutil"
+	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/Max-Leopold/factorio-mod-loader/factorio"
 )
+
+type modList struct {
+	Mods []factorio.Mod `json:"results"`
+}
 
 type modsRequestSortOrderType string
 
@@ -43,7 +50,7 @@ type modsRequest struct {
 	HideDeprecated bool
 	Page           int
 	PageSize       string
-	Sort           By
+	Sort           factorio.SortModsBy
 	NameList       *[]string
 	Version        versionType
 }
@@ -53,15 +60,15 @@ func NewModsRequest() modsRequest {
 		HideDeprecated: true,
 		Page:           0,
 		PageSize:       "20",
-		Sort:           func(m1, m2 *Mod) bool { return m1.DownloadsCount > m2.DownloadsCount },
+		Sort:           func(m1, m2 *factorio.Mod) bool { return m1.DownloadsCount > m2.DownloadsCount },
 		NameList:       nil,
 		Version:        Version.V1_1,
 	}
 }
 
-func (r *modsRequest) Execute() []Mod {
+func (r *modsRequest) Execute() *[]factorio.Mod {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", ApiUrl+"api/mods", nil)
+	req, err := http.NewRequest("GET", factorio.ApiUrl+"api/mods", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -85,13 +92,20 @@ func (r *modsRequest) Execute() []Mod {
 
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	mods := parseModList(&body).Mods
-	By(r.Sort).Sort(mods)
+	factorio.SortModsBy(r.Sort).Sort(mods)
 
-	return mods
+	return &mods
+}
+
+func parseModList(modListJson *[]byte) modList {
+	var modList modList
+	json.Unmarshal(*modListJson, &modList)
+
+	return modList
 }

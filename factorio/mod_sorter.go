@@ -2,9 +2,9 @@ package factorio
 
 import "sort"
 
-type By func(p1, p2 *Mod) bool
+type SortModsBy func(p1, p2 *Mod) bool
 
-func (by By) Sort(mods []Mod) {
+func (by SortModsBy) Sort(mods []Mod) {
 	ms := &modSorter{
 		mods: mods,
 		by:   by,

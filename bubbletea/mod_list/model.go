@@ -4,7 +4,9 @@ import (
 	"log"
 	"path/filepath"
 
-	"github.com/Max-Leopold/factorio-mod-loader/internal/factorio"
+	"github.com/Max-Leopold/factorio-mod-loader/factorio"
+	"github.com/Max-Leopold/factorio-mod-loader/factorio/config"
+	"github.com/Max-Leopold/factorio-mod-loader/factorio/requests"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -46,14 +48,14 @@ func (i *item) ToggleEnable() tea.Cmd {
 
 
 type bubbleMod struct {
-	list list.Model
+	list          list.Model
 }
 
 func NewBubbleMod() bubbleMod {
-	req := factorio.NewModsRequest()
+	req := requests.NewModsRequest()
 	req.PageSize = "max"
 	items := modsToBubbleMods(req.Execute())
-	list := list.New(items, newItemDelegate(), 0, 0)
+	list := list.New(*items, newItemDelegate(), 0, 0)
 	list.Title = "Factorio Mods"
 
 	return bubbleMod{
@@ -61,19 +63,19 @@ func NewBubbleMod() bubbleMod {
 	}
 }
 
-func modsToBubbleMods(mods []factorio.Mod) []list.Item {
+func modsToBubbleMods(mods *[]factorio.Mod) *[]list.Item {
 	modConfigPath, err := filepath.Abs("mod-list.json")
 	if err != nil {
 		log.Fatal(err)
 	}
-	config := factorio.GetModConfig(modConfigPath)
+	config := config.GetModConfig(modConfigPath)
 	configMap := make(map[string]bool)
 	for i := 0; i < len(config.Mods); i += 1 {
 		configMap[config.Mods[i].Name] = config.Mods[i].Enabled
 	}
 
-	items := make([]list.Item, len(mods))
-	for i, v := range mods {
+	items := make([]list.Item, len(*mods))
+	for i, v := range *mods {
 		_, enabled := configMap[v.Name]
 		items[i] = item{
 			Mod:     v,
@@ -81,5 +83,5 @@ func modsToBubbleMods(mods []factorio.Mod) []list.Item {
 		}
 	}
 
-	return items
+	return &items
 }
