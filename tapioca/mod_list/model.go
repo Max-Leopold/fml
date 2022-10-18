@@ -10,14 +10,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type item struct {
+type Item struct {
 	factorio.Mod
 	Enabled bool
 }
 
-type listReplaceMsg *item
+type listReplaceMsg *Item
 
-func createListReplaceMsg(item *item) tea.Cmd {
+func createListReplaceMsg(item *Item) tea.Cmd {
 	return func() tea.Msg {
 		return listReplaceMsg(item)
 	}
@@ -31,8 +31,8 @@ func createListStatusMsg (status string) tea.Cmd {
 	}
 }
 
-func (i item) FilterValue() string { return i.Title }
-func (i *item) ToggleEnable() tea.Cmd {
+func (i Item) FilterValue() string { return i.Title }
+func (i *Item) ToggleEnable() tea.Cmd {
 	i.Enabled = !i.Enabled
 
 	var statusMessage string
@@ -54,7 +54,7 @@ func NewBubbleMod() bubbleMod {
 	req := requests.NewModsRequest()
 	req.PageSize = "max"
 	items := modsToBubbleMods(req.Execute())
-	list := New(*items, NewModItemDelegate(), 0, 0)
+	list := New(items, NewModItemDelegate(), 0, 0)
 	list.Title = "Factorio Mods"
 
 	return bubbleMod{
@@ -62,7 +62,7 @@ func NewBubbleMod() bubbleMod {
 	}
 }
 
-func modsToBubbleMods(mods *[]factorio.Mod) *[]Item {
+func modsToBubbleMods(mods *[]factorio.Mod) []*Item {
 	modConfigPath, err := filepath.Abs("mod-list.json")
 	if err != nil {
 		log.Fatal(err)
@@ -73,14 +73,14 @@ func modsToBubbleMods(mods *[]factorio.Mod) *[]Item {
 		configMap[config.Mods[i].Name] = config.Mods[i].Enabled
 	}
 
-	items := make([]Item, len(*mods))
+	items := make([]*Item, len(*mods))
 	for i, v := range *mods {
 		_, enabled := configMap[v.Name]
-		items[i] = item{
+		items[i] = &Item{
 			Mod:     v,
 			Enabled: enabled,
 		}
 	}
 
-	return &items
+	return items
 }

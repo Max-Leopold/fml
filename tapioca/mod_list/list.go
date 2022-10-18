@@ -22,13 +22,6 @@ import (
 	"github.com/sahilm/fuzzy"
 )
 
-// Item is an item that appears in the list.
-type Item interface {
-	// Filter value is the value we use when filtering against this item when
-	// we're filtering the list.
-	FilterValue() string
-}
-
 // ItemDelegate encapsulates the general functionality for all list items. The
 // benefit to separating this logic from the item itself is that you can change
 // the functionality of items without changing the actual items themselves.
@@ -37,7 +30,7 @@ type Item interface {
 // help items will be added to the help view.
 type ItemDelegate interface {
 	// Render renders the item's view.
-	Render(w io.Writer, m Model, index int, item Item)
+	Render(w io.Writer, m Model, index int, item *Item)
 
 	// Height is the height of the list item.
 	Height() int
@@ -53,14 +46,14 @@ type ItemDelegate interface {
 }
 
 type filteredItem struct {
-	item    Item  // item matched
+	item    *Item  // item matched
 	matches []int // rune indices of matched items
 }
 
 type filteredItems []filteredItem
 
-func (f filteredItems) items() []Item {
-	agg := make([]Item, len(f))
+func (f filteredItems) items() []*Item {
+	agg := make([]*Item, len(f))
 	for i, v := range f {
 		agg[i] = v.item
 	}
@@ -169,7 +162,7 @@ type Model struct {
 	statusMessageTimer *time.Timer
 
 	// The master set of items we're working with.
-	items []Item
+	items []*Item
 
 	// Filtered items we're currently displaying. Filtering, toggles and so on
 	// will alter this slice so we can show what is relevant. For that reason,
@@ -180,7 +173,7 @@ type Model struct {
 }
 
 // New returns a new model with sensible defaults.
-func New(items []Item, delegate ItemDelegate, width, height int) Model {
+func New(items []*Item, delegate ItemDelegate, width, height int) Model {
 	styles := DefaultStyles()
 
 	sp := spinner.New()
@@ -218,6 +211,7 @@ func New(items []Item, delegate ItemDelegate, width, height int) Model {
 		width:     width,
 		height:    height,
 		delegate:  delegate,
+		// Initialize items as an empty slice so we can load items asynchronously
 		items:     items,
 		Paginator: p,
 		spinner:   sp,
@@ -327,12 +321,12 @@ func (m Model) ShowHelp() bool {
 }
 
 // Items returns the items in the list.
-func (m Model) Items() []Item {
+func (m Model) Items() []*Item {
 	return m.items
 }
 
 // Set the items available in the list. This returns a command.
-func (m *Model) SetItems(i []Item) tea.Cmd {
+func (m *Model) SetItems(i []*Item) tea.Cmd {
 	var cmd tea.Cmd
 	m.items = i
 
@@ -363,7 +357,7 @@ func (m *Model) ResetFilter() {
 }
 
 // Replace an item at the given index. This returns a command.
-func (m *Model) SetItem(index int, item Item) tea.Cmd {
+func (m *Model) SetItem(index int, item *Item) tea.Cmd {
 	var cmd tea.Cmd
 	m.items[index] = item
 
@@ -411,7 +405,7 @@ func (m *Model) SetDelegate(d ItemDelegate) {
 }
 
 // VisibleItems returns the total items available to be shown.
-func (m Model) VisibleItems() []Item {
+func (m Model) VisibleItems() []*Item {
 	if m.filterState != Unfiltered {
 		return m.filteredItems.items()
 	}
@@ -419,7 +413,7 @@ func (m Model) VisibleItems() []Item {
 }
 
 // SelectedItems returns the current selected item in the list.
-func (m Model) SelectedItem() Item {
+func (m Model) SelectedItem() *Item {
 	i := m.Index()
 
 	items := m.VisibleItems()
@@ -1194,7 +1188,7 @@ func filterItems(m Model) tea.Cmd {
 		items := m.items
 
 		for _, t := range items {
-			targets = append(targets, t.FilterValue())
+			targets = append(targets, (*t).FilterValue())
 		}
 
 		filterMatches := []filteredItem{}
@@ -1209,24 +1203,24 @@ func filterItems(m Model) tea.Cmd {
 	}
 }
 
-func insertItemIntoSlice(items []Item, item Item, index int) []Item {
+func insertItemIntoSlice(items []*Item, item Item, index int) []*Item {
 	if items == nil {
-		return []Item{item}
+		return []*Item{&item}
 	}
 	if index >= len(items) {
-		return append(items, item)
+		return append(items, &item)
 	}
 
 	index = max(0, index)
 
 	items = append(items, nil)
 	copy(items[index+1:], items[index:])
-	items[index] = item
+	items[index] = &item
 	return items
 }
 
 // Remove an item from a slice of items at the given index. This runs in O(n).
-func removeItemFromSlice(i []Item, index int) []Item {
+func removeItemFromSlice(i []*Item, index int) []*Item {
 	if index >= len(i) {
 		return i // noop
 	}

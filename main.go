@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	modList "github.com/Max-Leopold/factorio-mod-loader/bubbletea/mod_list"
+	"github.com/Max-Leopold/factorio-mod-loader/tapioca/mod_list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

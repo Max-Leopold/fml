@@ -1,5 +1,5 @@
 
-package bubbletea
+package tapioca
 
 import "github.com/charmbracelet/lipgloss"
 

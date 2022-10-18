@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/Max-Leopold/factorio-mod-loader/bubbletea"
+	"github.com/Max-Leopold/factorio-mod-loader/tapioca"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/reflow/truncate"
@@ -52,19 +52,19 @@ func (d ModItemDelegate) Update(msg tea.Msg, l *Model) tea.Cmd {
 		allItems := l.Items()
 		var i int
 		for index, elem := range allItems {
-			if elem.(item).Name == newItem.Name {
+			if elem.Name == newItem.Name {
 				i = index
 				break
 			}
 		}
-		cmd = tea.Batch(cmd, l.SetItem(i, *newItem))
+		cmd = tea.Batch(cmd, l.SetItem(i, newItem))
 	case statusListStatusMsg:
 		cmd = tea.Batch(cmd, l.NewStatusMessage(string(msg)))
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, d.DelegateKeyMap.enable):
 			// Toggle enable
-			selectedItem := l.SelectedItem().(item)
+			selectedItem := l.SelectedItem()
 			cmd = tea.Batch(cmd, selectedItem.ToggleEnable())
 		}
 	}
@@ -72,28 +72,16 @@ func (d ModItemDelegate) Update(msg tea.Msg, l *Model) tea.Cmd {
 	return cmd
 }
 
-func (d ModItemDelegate) Render(w io.Writer, m Model, index int, listItem Item) {
-	var (
-		mod item
-		title string
-	)
-
-	if i, ok := listItem.(item); ok {
-		mod = i
-		title = i.Title
-	} else {
-		return
-	}
-
+func (d ModItemDelegate) Render(w io.Writer, m Model, index int, listItem *Item) {
 	if m.Width() <= 0 {
 		return
 	}
 
-	title = truncate.StringWithTail(mod.Title, uint(m.Width()), bubbletea.Ellipsis)
+	var title = truncate.StringWithTail(listItem.Title, uint(m.Width()), tapioca.Ellipsis)
 	if index == m.Index() {
-		title = bubbletea.ListCursor(title, mod.Enabled)
+		title = tapioca.ListCursor(listItem.Title, listItem.Enabled)
 	} else {
-		title = bubbletea.ListItem(title, mod.Enabled)
+		title = tapioca.ListItem(listItem.Title, listItem.Enabled)
 	}
 
 	fmt.Fprintf(w, "%s", title)
