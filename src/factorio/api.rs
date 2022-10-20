@@ -8,6 +8,18 @@ pub struct Mods {
     pub results: Vec<Mod>,
 }
 
+pub enum SortBy {
+    Downloads,
+}
+
+impl Mods {
+    pub fn sort(&mut self, sort_by: SortBy) {
+        match sort_by {
+            SortBy::Downloads => self.results.sort_by(|a, b| b.downloads_count.cmp(&a.downloads_count)),
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mod {
