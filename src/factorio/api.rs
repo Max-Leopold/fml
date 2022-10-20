@@ -4,7 +4,7 @@ use serde::Serialize;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Mods {
+struct Mods {
     pub results: Vec<Mod>,
 }
 
@@ -57,11 +57,13 @@ pub struct InfoJson {
     pub factorio_version: String,
 }
 
-pub fn get_mods() -> Result<Mods, Box<dyn std::error::Error>> {
+pub fn get_mods(sort_by: Option<SortBy>) -> Result<Vec<Mod>, Box<dyn std::error::Error>> {
     let url = "https://mods.factorio.com/api/mods?page_size=max";
     let body = reqwest::blocking::get(url)?.text()?;
-    let mods: Mods = serde_json::from_str(&body)?;
-    Ok(mods)
+    let mut mods: Mods = serde_json::from_str(&body)?;
+    let sort_by = sort_by.unwrap_or(SortBy::Downloads);
+    mods.sort(sort_by);
+    Ok(mods.results)
 }
 
 
