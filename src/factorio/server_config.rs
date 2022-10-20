@@ -19,7 +19,6 @@ pub struct Visibility {
     pub public: bool,
 }
 
-
 pub fn get_server_config(server_config_path: &str) -> Result<Root, Box<dyn std::error::Error>> {
     let server_config = std::fs::read_to_string(server_config_path)?;
     let server_config: Root = serde_json::from_str(&server_config)?;
