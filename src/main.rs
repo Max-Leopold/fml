@@ -1,8 +1,15 @@
 mod factorio;
+mod fml;
+
+use fml::app::FML;
 
 fn main() {
-    let mods = factorio::api::get_mods().expect("Failed to get mods from Factorio API");
-    mods.results.iter().for_each(|mod_| {
-        println!("{}: {}", mod_.name, mod_.title);
-    });
+    let mods_config_path = "mod-list.json";
+    let server_config_path = "server-settings.json";
+    let result = FML::default()
+        .with_mods_config(mods_config_path)
+        .with_server_config(server_config_path)
+        .start();
+
+    println!("{}", result);
 }
