@@ -24,7 +24,7 @@ pub enum Event<I> {
 }
 
 pub struct Events {
-    pub rx: mpsc::UnboundedReceiver<Event<KeyEvent>>,
+    rx: mpsc::UnboundedReceiver<Event<KeyEvent>>,
 }
 
 impl Events {
