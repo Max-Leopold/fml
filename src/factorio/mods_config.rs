@@ -3,12 +3,12 @@ use serde::{Serialize, Deserialize};
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModsConfig {
-    pub mods: Vec<Mod>,
+    pub mods: Vec<Entry>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Mod {
+pub struct Entry {
     pub name: String,
     pub enabled: bool,
 }

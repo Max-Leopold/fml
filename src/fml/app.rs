@@ -7,15 +7,19 @@ use crossterm::terminal::{
 };
 use log::{debug, info};
 use tui::backend::{Backend, CrosstermBackend};
-use tui::widgets::{Block, Borders};
-use tui::Terminal;
+use tui::layout::Rect;
+use tui::style::{Color, Style, Modifier};
+use tui::text::Spans;
+use tui::widgets::{Block, Borders, List, ListItem};
+use tui::{Frame, Terminal};
 
 use crate::factorio::{api, mods_config, server_config};
 
 use super::event::{Event, Events};
+use super::mods::ModList;
 
 pub struct FML {
-    pub mods: Vec<api::Mod>,
+    pub mod_list: ModList,
     pub mods_config: mods_config::ModsConfig,
     pub server_config: server_config::ServerConfig,
     events: Events,
@@ -24,7 +28,7 @@ pub struct FML {
 impl FML {
     pub fn new() -> Self {
         Self {
-            mods: Vec::new(),
+            mod_list: ModList::default(),
             mods_config: mods_config::ModsConfig::default(),
             server_config: server_config::ServerConfig::default(),
             events: Events::with_config(None),
@@ -47,7 +51,9 @@ impl FML {
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("Starting FML!");
-        self.mods = api::get_mods(Some(api::SortBy::Downloads)).await?;
+        self.mod_list = ModList::with_items(
+            api::get_mods(Some(api::SortBy::Downloads)).await.unwrap()
+        );
 
         enable_raw_mode()?;
         let mut stdout = io::stdout();
@@ -74,6 +80,7 @@ impl FML {
         terminal: &mut Terminal<B>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         loop {
+            terminal.draw(|frame| self.draw(frame))?;
             if let Some(event) = self.next_event().await {
                 match event {
                     Event::Input(input) => match input {
@@ -86,17 +93,34 @@ impl FML {
                         _ => {}
                     },
                     Event::Tick => {
-                        terminal.draw(|f| {
-                            let size = f.size();
-                            let block = Block::default().title("FML").borders(Borders::ALL);
-                            f.render_widget(block, size);
-                        })?;
+                        // If we ever need to do some recurring task every tick we can call it here
                     }
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn draw(&mut self, frame: &mut Frame<impl Backend>) {
+        let rect = frame.size();
+
+        self.draw_list(frame, rect);
+    }
+
+    fn draw_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
+        let items: Vec<ListItem> = self.mod_list.items.iter().map(|m| {
+            let lines = vec![Spans::from(&*m.title)];
+            ListItem::new(lines).style(Style::default().fg(Color::Gray))
+        }).collect();
+
+        let items = List::new(items)
+            .block(Block::default().borders(Borders::ALL).title("Mods"))
+            .highlight_style(
+                Style::default().bg(Color::Red).add_modifier(Modifier::BOLD)
+            ).highlight_symbol(">> ");
+
+        frame.render_stateful_widget(items, layout, &mut self.mod_list.state);
     }
 
     async fn next_event(&mut self) -> Option<Event<KeyEvent>> {
