@@ -10,8 +10,11 @@ pub struct ModList {
 
 impl ModList {
   pub fn with_items(items: Vec<Mod>) -> ModList {
+    let mut list_state = ListState::default();
+    list_state.select(Some(0));
+
     ModList {
-      state: ListState::default(),
+      state: list_state,
       items
     }
   }
