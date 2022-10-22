@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crossterm::event::{KeyCode};
+use crossterm::event::{KeyEvent};
 use futures_util::{StreamExt};
 use tokio::sync::mpsc;
 
@@ -24,7 +24,7 @@ pub enum Event<I> {
 }
 
 pub struct Events {
-    pub rx: mpsc::UnboundedReceiver<Event<KeyCode>>,
+    pub rx: mpsc::UnboundedReceiver<Event<KeyEvent>>,
 }
 
 impl Events {
@@ -46,9 +46,8 @@ impl Events {
                   maybe_event = event => {
                     match maybe_event {
                       Some(Ok(event)) => {
-                        println!("{:?}", event);
-                        if let crossterm::event::Event::Key(key) = event {
-                          tx.send(Event::Input(key.code)).unwrap();
+                        if let crossterm::event::Event::Key(key_event) = event {
+                          tx.send(Event::Input(key_event)).unwrap();
                         }
                       }
                       Some(Err(e)) => {
@@ -64,7 +63,7 @@ impl Events {
         Self { rx }
     }
 
-    pub fn next(&mut self) -> impl futures_util::Future<Output = Option<Event<KeyCode>>> + '_ {
+    pub fn next(&mut self) -> impl futures_util::Future<Output = Option<Event<KeyEvent>>> + '_ {
         self.rx.recv()
     }
 }
