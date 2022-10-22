@@ -10,13 +10,14 @@ use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::Rect;
 use tui::style::{Color, Style, Modifier};
 use tui::text::Spans;
-use tui::widgets::{Block, Borders, List, ListItem};
+use tui::widgets::{Block, Borders};
 use tui::{Frame, Terminal};
 
 use crate::factorio::{api, mods_config, server_config};
 
 use super::event::{Event, Events, KeyCode};
 use super::mods::ModList;
+use super::widgets::list::{List, ListItem};
 
 pub struct FML {
     pub mod_list: ModList,

@@ -1,6 +1,6 @@
-use tui::widgets::ListState;
-
 use crate::factorio::api::Mod;
+
+use super::widgets::list::ListState;
 
 #[derive(Debug, Default)]
 pub struct ModList {
