@@ -1,6 +1,6 @@
 use std::io;
 
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent};
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture, KeyEvent};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -15,7 +15,7 @@ use tui::{Frame, Terminal};
 
 use crate::factorio::{api, mods_config, server_config};
 
-use super::event::{Event, Events};
+use super::event::{Event, Events, KeyCode};
 use super::mods::ModList;
 
 pub struct FML {
@@ -84,12 +84,9 @@ impl FML {
             if let Some(event) = self.next_event().await {
                 match event {
                     Event::Input(input) => match input {
-                        KeyEvent {
-                            code: KeyCode::Char('q'),
-                            ..
-                        } => {
-                            break;
-                        }
+                        KeyCode::Ctrl('c') => { break },
+                        KeyCode::Up => { self.mod_list.previous() }
+                        KeyCode::Down => { self.mod_list.next() }
                         _ => {}
                     },
                     Event::Tick => {
@@ -123,7 +120,7 @@ impl FML {
         frame.render_stateful_widget(items, layout, &mut self.mod_list.state);
     }
 
-    async fn next_event(&mut self) -> Option<Event<KeyEvent>> {
+    async fn next_event(&mut self) -> Option<Event<KeyCode>> {
         self.events.next().await
     }
 }

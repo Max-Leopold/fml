@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use crossterm::event::{KeyEvent};
-use futures_util::{StreamExt};
+use crossterm::event::{KeyEvent, KeyModifiers};
+use futures_util::StreamExt;
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Copy)]
@@ -23,8 +23,17 @@ pub enum Event<I> {
     Tick,
 }
 
+#[derive(Debug)]
+pub enum KeyCode {
+    Char(char),
+    Ctrl(char),
+    Up,
+    Down,
+    Unknown,
+}
+
 pub struct Events {
-    rx: mpsc::UnboundedReceiver<Event<KeyEvent>>,
+    rx: mpsc::UnboundedReceiver<Event<KeyCode>>,
 }
 
 impl Events {
@@ -47,7 +56,16 @@ impl Events {
                     match maybe_event {
                       Some(Ok(event)) => {
                         if let crossterm::event::Event::Key(key_event) = event {
-                          tx.send(Event::Input(key_event)).unwrap();
+                          let key_code: KeyCode = match key_event.code {
+                            crossterm::event::KeyCode::Up => KeyCode::Up,
+                            crossterm::event::KeyCode::Down => KeyCode::Down,
+                            crossterm::event::KeyCode::Char(c) => match key_event.modifiers {
+                              KeyModifiers::CONTROL => KeyCode::Ctrl(c),
+                              _ => KeyCode::Char(c)
+                            },
+                            _ => KeyCode::Unknown
+                          };
+                          tx.send(Event::Input(key_code)).unwrap();
                         }
                       }
                       Some(Err(e)) => {
@@ -63,7 +81,7 @@ impl Events {
         Self { rx }
     }
 
-    pub fn next(&mut self) -> impl futures_util::Future<Output = Option<Event<KeyEvent>>> + '_ {
+    pub fn next(&mut self) -> impl futures_util::Future<Output = Option<Event<KeyCode>>> + '_ {
         self.rx.recv()
     }
 }
