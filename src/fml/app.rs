@@ -102,6 +102,10 @@ impl FML {
                         KeyCode::Up => self.mod_list.previous(),
                         KeyCode::Down => self.mod_list.next(),
                         KeyCode::Enter => self.mod_list.toggle_install(None),
+                        KeyCode::Char(c) => self.filter.push(c),
+                        KeyCode::Backspace => {
+                            self.filter.pop();
+                        }
                         _ => {}
                     },
                     Event::Tick => {
