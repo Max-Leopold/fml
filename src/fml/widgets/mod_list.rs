@@ -5,6 +5,8 @@ use tui::text::Text;
 use tui::widgets::{Block, StatefulWidget, Widget};
 use unicode_width::UnicodeWidthStr;
 
+use crate::factorio::api::Mod;
+
 #[derive(Debug, Clone, Default)]
 pub struct ListState {
     offset: usize,
@@ -24,37 +26,38 @@ impl ListState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ListItem<'a> {
-    content: Text<'a>,
+#[derive(Debug, Clone)]
+pub struct ModListItem {
+    pub factorio_mod: Mod,
+    pub installed: bool,
     style: Style,
-    installed: bool,
 }
 
-impl<'a> ListItem<'a> {
-    pub fn new<T>(content: T) -> ListItem<'a>
-    where
-        T: Into<Text<'a>>,
-    {
-        ListItem {
-            content: content.into(),
+impl ModListItem {
+    pub fn new(factorio_mod: Mod, installed: bool) -> ModListItem {
+        ModListItem {
+            factorio_mod,
             style: Style::default(),
-            installed: false,
+            installed,
         }
     }
 
-    pub fn style(mut self, style: Style) -> ListItem<'a> {
+    pub fn style(mut self, style: Style) -> ModListItem {
         self.style = style;
         self
     }
 
-    pub fn installed(mut self, installed: bool) -> ListItem<'a> {
+    pub fn installed(mut self, installed: bool) -> ModListItem {
         self.installed = installed;
         self
     }
 
     pub fn height(&self) -> usize {
-        self.content.height()
+        self.content().height()
+    }
+
+    pub fn content(&self) -> Text {
+        self.factorio_mod.name.clone().into()
     }
 }
 
@@ -66,16 +69,16 @@ impl<'a> ListItem<'a> {
 /// # use tui::widgets::{Block, Borders, List, ListItem};
 /// # use tui::style::{Style, Color, Modifier};
 /// let items = [ListItem::new("Item 1"), ListItem::new("Item 2"), ListItem::new("Item 3")];
-/// List::new(items)
+/// ModList::new(items)
 ///     .block(Block::default().title("List").borders(Borders::ALL))
 ///     .style(Style::default().fg(Color::White))
 ///     .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
 ///     .highlight_symbol(">>");
 /// ```
 #[derive(Debug, Clone)]
-pub struct List<'a> {
+pub struct ModList<'a> {
     block: Option<Block<'a>>,
-    items: Vec<ListItem<'a>>,
+    items: Vec<ModListItem>,
     /// Style used as a base style for the widget
     style: Style,
     start_corner: Corner,
@@ -88,12 +91,12 @@ pub struct List<'a> {
     repeat_highlight_symbol: bool,
 }
 
-impl<'a> List<'a> {
-    pub fn new<T>(items: T) -> List<'a>
+impl<'a> ModList<'a> {
+    pub fn with_items<T>(items: T) -> ModList<'a>
     where
-        T: Into<Vec<ListItem<'a>>>,
+        T: Into<Vec<ModListItem>>,
     {
-        List {
+        ModList {
             block: None,
             style: Style::default(),
             items: items.into(),
@@ -105,37 +108,37 @@ impl<'a> List<'a> {
         }
     }
 
-    pub fn block(mut self, block: Block<'a>) -> List<'a> {
+    pub fn block(mut self, block: Block<'a>) -> ModList<'a> {
         self.block = Some(block);
         self
     }
 
-    pub fn style(mut self, style: Style) -> List<'a> {
+    pub fn style(mut self, style: Style) -> ModList<'a> {
         self.style = style;
         self
     }
 
-    pub fn highlight_symbol(mut self, highlight_symbol: &'a str) -> List<'a> {
+    pub fn highlight_symbol(mut self, highlight_symbol: &'a str) -> ModList<'a> {
         self.highlight_symbol = Some(highlight_symbol);
         self
     }
 
-    pub fn installed_symbol(mut self, installed_symbol: &'a str) -> List<'a> {
+    pub fn installed_symbol(mut self, installed_symbol: &'a str) -> ModList<'a> {
         self.installed_symbol = Some(installed_symbol);
         self
     }
 
-    pub fn highlight_style(mut self, style: Style) -> List<'a> {
+    pub fn highlight_style(mut self, style: Style) -> ModList<'a> {
         self.highlight_style = style;
         self
     }
 
-    pub fn repeat_highlight_symbol(mut self, repeat: bool) -> List<'a> {
+    pub fn repeat_highlight_symbol(mut self, repeat: bool) -> ModList<'a> {
         self.repeat_highlight_symbol = repeat;
         self
     }
 
-    pub fn start_corner(mut self, corner: Corner) -> List<'a> {
+    pub fn start_corner(mut self, corner: Corner) -> ModList<'a> {
         self.start_corner = corner;
         self
     }
@@ -179,7 +182,7 @@ impl<'a> List<'a> {
     }
 }
 
-impl<'a> StatefulWidget for List<'a> {
+impl<'a> StatefulWidget for ModList<'a> {
     type State = ListState;
 
     fn render(mut self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
@@ -239,7 +242,7 @@ impl<'a> StatefulWidget for List<'a> {
             buf.set_style(area, item_style);
 
             let is_selected = state.selected.map(|s| s == i).unwrap_or(false);
-            for (j, line) in item.content.lines.iter().enumerate() {
+            for (j, line) in item.content().lines.iter().enumerate() {
                 // if the item is selected, we need to display the hightlight symbol:
                 // - either for the first line of the item only,
                 // - or for each line of the item if the appropriate option is set
@@ -249,7 +252,11 @@ impl<'a> StatefulWidget for List<'a> {
                     &blank_symbol
                 };
 
-                let symbol = if item.installed { installed_symbol } else { symbol };
+                let symbol = if item.installed {
+                    installed_symbol
+                } else {
+                    symbol
+                };
                 let (elem_x, max_element_width) = if has_selection {
                     let (elem_x, _) = buf.set_stringn(
                         x,
@@ -271,7 +278,7 @@ impl<'a> StatefulWidget for List<'a> {
     }
 }
 
-impl<'a> Widget for List<'a> {
+impl<'a> Widget for ModList<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let mut state = ListState::default();
         StatefulWidget::render(self, area, buf, &mut state);

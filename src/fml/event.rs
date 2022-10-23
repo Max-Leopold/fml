@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crossterm::event::{KeyEvent, KeyModifiers};
+use crossterm::event::KeyModifiers;
 use futures_util::StreamExt;
 use tokio::sync::mpsc;
 
@@ -29,6 +29,7 @@ pub enum KeyCode {
     Ctrl(char),
     Up,
     Down,
+    Enter,
     Unknown,
 }
 
@@ -59,6 +60,7 @@ impl Events {
                           let key_code: KeyCode = match key_event.code {
                             crossterm::event::KeyCode::Up => KeyCode::Up,
                             crossterm::event::KeyCode::Down => KeyCode::Down,
+                            crossterm::event::KeyCode::Enter => KeyCode::Enter,
                             crossterm::event::KeyCode::Char(c) => match key_event.modifiers {
                               KeyModifiers::CONTROL => KeyCode::Ctrl(c),
                               _ => KeyCode::Char(c)

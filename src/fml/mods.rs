@@ -1,50 +1,59 @@
-use crate::factorio::api::Mod;
-
-use super::widgets::list::ListState;
+use super::widgets::mod_list::{ListState, ModListItem};
 
 #[derive(Debug, Default)]
-pub struct ModList {
+pub struct StatefulModList {
     pub state: ListState,
-    pub items: Vec<Mod>,
+    pub items: Vec<ModListItem>,
 }
 
-impl ModList {
-  pub fn with_items(items: Vec<Mod>) -> ModList {
-    let mut list_state = ListState::default();
-    list_state.select(Some(0));
+impl StatefulModList {
+    pub fn with_items(items: Vec<ModListItem>) -> StatefulModList {
+        let mut list_state = ListState::default();
+        list_state.select(Some(0));
 
-    ModList {
-      state: list_state,
-      items
+        StatefulModList {
+            state: list_state,
+            items,
+        }
     }
-  }
 
-  pub fn next(&mut self) {
-    let i = match self.state.selected() {
-      Some(i) => {
-        if i >= self.items.len() - 1 {
-          0
-        } else {
-          i + 1
-        }
-      }
-      None => 0,
-    };
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.items.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
 
-    self.state.select(Some(i));
-  }
+        self.state.select(Some(i));
+    }
 
-  pub fn previous(&mut self) {
-    let i = match self.state.selected() {
-      Some(i) => {
-        if i == 0 {
-          self.items.len() - 1
-        } else {
-          i - 1
-        }
-      }
-      None => 0
-    };
-    self.state.select(Some(i));
-  }
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.items.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn toggle_install(&mut self, index: Option<usize>) {
+        let index = match index {
+            Some(index) => index,
+            None => match self.state.selected() {
+                Some(index) => index,
+                None => return,
+            },
+        };
+        self.items[index].installed = !self.items[index].installed;
+    }
 }

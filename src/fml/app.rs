@@ -1,6 +1,6 @@
 use std::io;
 
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture, KeyEvent};
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -8,19 +8,18 @@ use crossterm::terminal::{
 use log::{debug, info};
 use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::Rect;
-use tui::style::{Color, Style, Modifier};
-use tui::text::Spans;
+use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders};
 use tui::{Frame, Terminal};
 
 use crate::factorio::{api, mods_config, server_config};
 
 use super::event::{Event, Events, KeyCode};
-use super::mods::ModList;
-use super::widgets::list::{List, ListItem};
+use super::mods::StatefulModList;
+use super::widgets::mod_list::{ModList, ModListItem};
 
 pub struct FML {
-    pub mod_list: ModList,
+    pub mod_list: StatefulModList,
     pub mods_config: mods_config::ModsConfig,
     pub server_config: server_config::ServerConfig,
     events: Events,
@@ -29,7 +28,7 @@ pub struct FML {
 impl FML {
     pub fn new() -> Self {
         Self {
-            mod_list: ModList::default(),
+            mod_list: StatefulModList::default(),
             mods_config: mods_config::ModsConfig::default(),
             server_config: server_config::ServerConfig::default(),
             events: Events::with_config(None),
@@ -52,9 +51,7 @@ impl FML {
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("Starting FML!");
-        self.mod_list = ModList::with_items(
-            api::get_mods(Some(api::SortBy::Downloads)).await.unwrap()
-        );
+        self.mod_list = self.generate_mod_list().await.expect("Failed to generate mod list");
 
         enable_raw_mode()?;
         let mut stdout = io::stdout();
@@ -76,6 +73,20 @@ impl FML {
         Ok(())
     }
 
+    async fn generate_mod_list(&self) -> Option<StatefulModList> {
+        let mods = api::get_mods(None).await.ok()?;
+        let mut mod_list_items = Vec::new();
+        for mod_ in mods {
+            let enabled = self.mods_config.mods.iter().any(|entry| {
+                entry.name == mod_.name && entry.enabled
+            });
+            let mod_list_item = ModListItem::new(mod_, enabled);
+            mod_list_items.push(mod_list_item);
+        }
+        let mod_list = StatefulModList::with_items(mod_list_items);
+        Some(mod_list)
+    }
+
     pub async fn run<B: Backend>(
         &mut self,
         terminal: &mut Terminal<B>,
@@ -85,9 +96,10 @@ impl FML {
             if let Some(event) = self.next_event().await {
                 match event {
                     Event::Input(input) => match input {
-                        KeyCode::Ctrl('c') => { break },
-                        KeyCode::Up => { self.mod_list.previous() }
-                        KeyCode::Down => { self.mod_list.next() }
+                        KeyCode::Ctrl('c') => break,
+                        KeyCode::Up => self.mod_list.previous(),
+                        KeyCode::Down => self.mod_list.next(),
+                        KeyCode::Enter => self.mod_list.toggle_install(None),
                         _ => {}
                     },
                     Event::Tick => {
@@ -107,18 +119,13 @@ impl FML {
     }
 
     fn draw_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let items: Vec<ListItem> = self.mod_list.items.iter().map(|m| {
-            let lines = vec![Spans::from(&*m.title)];
-            ListItem::new(lines).style(Style::default().fg(Color::Gray))
-        }).collect();
-
-        let items = List::new(items)
+        let list = ModList::with_items(self.mod_list.items.clone())
             .block(Block::default().borders(Borders::ALL).title("Mods"))
             .highlight_style(
                 Style::default().bg(Color::Red).add_modifier(Modifier::BOLD)
-            ).highlight_symbol(">> ");
+            ).highlight_symbol(">> ").installed_symbol("✔  ");
 
-        frame.render_stateful_widget(items, layout, &mut self.mod_list.state);
+        frame.render_stateful_widget(list, layout, &mut self.mod_list.state);
     }
 
     async fn next_event(&mut self) -> Option<Event<KeyCode>> {
