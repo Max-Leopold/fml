@@ -7,7 +7,7 @@ use crossterm::terminal::{
 };
 use log::{debug, info};
 use tui::backend::{Backend, CrosstermBackend};
-use tui::layout::Rect;
+use tui::layout::{Rect, Layout};
 use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders};
 use tui::{Frame, Terminal};
@@ -19,10 +19,11 @@ use super::mods::StatefulModList;
 use super::widgets::mod_list::{ModList, ModListItem};
 
 pub struct FML {
-    pub mod_list: StatefulModList,
-    pub mods_config: mods_config::ModsConfig,
-    pub server_config: server_config::ServerConfig,
+    mod_list: StatefulModList,
+    mods_config: mods_config::ModsConfig,
+    server_config: server_config::ServerConfig,
     events: Events,
+    filter: String,
 }
 
 impl FML {
@@ -32,6 +33,7 @@ impl FML {
             mods_config: mods_config::ModsConfig::default(),
             server_config: server_config::ServerConfig::default(),
             events: Events::with_config(None),
+            filter: String::new(),
         }
     }
 
@@ -114,18 +116,36 @@ impl FML {
 
     fn draw(&mut self, frame: &mut Frame<impl Backend>) {
         let rect = frame.size();
+        let chunks = Layout::default()
+            .direction(tui::layout::Direction::Vertical)
+            .constraints(
+                [
+                    tui::layout::Constraint::Length(3),
+                    tui::layout::Constraint::Min(0),
+                ]
+                .as_ref(),
+            )
+            .split(rect);
 
-        self.draw_list(frame, rect);
+        self.draw_search_bar(frame, chunks[0]);
+        self.draw_list(frame, chunks[1]);
     }
 
     fn draw_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let list = ModList::with_items(self.mod_list.items.clone())
+        let list = ModList::with_items(self.mod_list.items(&self.filter))
             .block(Block::default().borders(Borders::ALL).title("Mods"))
             .highlight_style(
                 Style::default().bg(Color::Red).add_modifier(Modifier::BOLD)
             ).highlight_symbol(">> ").installed_symbol("✔  ");
 
         frame.render_stateful_widget(list, layout, &mut self.mod_list.state);
+    }
+
+    fn draw_search_bar(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
+        let search_bar = tui::widgets::Paragraph::new(self.filter.as_str())
+            .block(Block::default().borders(Borders::ALL).title("Search"));
+
+        frame.render_widget(search_bar, layout);
     }
 
     async fn next_event(&mut self) -> Option<Event<KeyCode>> {

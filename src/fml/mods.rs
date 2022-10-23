@@ -3,7 +3,7 @@ use super::widgets::mod_list::{ListState, ModListItem};
 #[derive(Debug, Default)]
 pub struct StatefulModList {
     pub state: ListState,
-    pub items: Vec<ModListItem>,
+    items: Vec<ModListItem>,
 }
 
 impl StatefulModList {
@@ -55,5 +55,13 @@ impl StatefulModList {
             },
         };
         self.items[index].installed = !self.items[index].installed;
+    }
+
+    pub fn items(&mut self, filter: &String) -> Vec<ModListItem> {
+        self.items
+            .iter()
+            .filter(|item| item.factorio_mod.name.contains(filter))
+            .cloned()
+            .collect()
     }
 }
