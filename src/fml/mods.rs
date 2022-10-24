@@ -1,20 +1,33 @@
 use super::widgets::mod_list::{ListState, ModListItem};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug, Default)]
 pub struct StatefulModList {
     pub state: ListState,
-    items: Vec<ModListItem>,
+    items: Vec<Rc<RefCell<ModListItem>>>,
+    filtered_items: Vec<Rc<RefCell<ModListItem>>>,
 }
 
 impl StatefulModList {
     pub fn with_items(items: Vec<ModListItem>) -> StatefulModList {
-        let mut list_state = ListState::default();
-        list_state.select(Some(0));
+        let state = ListState::default();
+        let items: Vec<Rc<RefCell<ModListItem>>> = items
+            .into_iter()
+            .map(|item| Rc::new(RefCell::new(item)))
+            .collect();
+
+        let filtered_items = items.clone();
 
         StatefulModList {
-            state: list_state,
+            state,
             items,
+            filtered_items,
         }
+    }
+
+    pub fn reset_selected(&mut self) {
+        self.state.select(None);
     }
 
     pub fn next(&mut self) {
@@ -54,14 +67,29 @@ impl StatefulModList {
                 None => return,
             },
         };
-        self.items[index].installed = !self.items[index].installed;
+        // Toggle installed value for the selected mod
+        let mod_item = self.filtered_items.get(index).unwrap();
+        let mut mod_item = mod_item.borrow_mut();
+        mod_item.installed = !mod_item.installed;
     }
 
     pub fn items(&mut self, filter: &String) -> Vec<ModListItem> {
-        self.items
+        self.filtered_items = self
+            .items
             .iter()
-            .filter(|item| item.factorio_mod.name.contains(filter))
-            .cloned()
+            .filter(|item| {
+                item.borrow()
+                    .factorio_mod
+                    .name
+                    .to_lowercase()
+                    .contains(&filter.to_lowercase())
+            })
+            .map(|item| item.clone())
+            .collect();
+
+        self.filtered_items
+            .iter()
+            .map(|item| item.borrow().clone())
             .collect()
     }
 }

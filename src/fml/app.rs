@@ -7,7 +7,7 @@ use crossterm::terminal::{
 };
 use log::{debug, info};
 use tui::backend::{Backend, CrosstermBackend};
-use tui::layout::{Rect, Layout};
+use tui::layout::{Layout, Rect};
 use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders};
 use tui::{Frame, Terminal};
@@ -53,7 +53,10 @@ impl FML {
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("Starting FML!");
-        self.mod_list = self.generate_mod_list().await.expect("Failed to generate mod list");
+        self.mod_list = self
+            .generate_mod_list()
+            .await
+            .expect("Failed to generate mod list");
 
         enable_raw_mode()?;
         let mut stdout = io::stdout();
@@ -77,14 +80,10 @@ impl FML {
 
     async fn generate_mod_list(&self) -> Option<StatefulModList> {
         let mods = api::get_mods(None).await.ok()?;
-        let mut mod_list_items = Vec::new();
-        for mod_ in mods {
-            let enabled = self.mods_config.mods.iter().any(|entry| {
-                entry.name == mod_.name && entry.enabled
-            });
-            let mod_list_item = ModListItem::new(mod_, enabled);
-            mod_list_items.push(mod_list_item);
-        }
+        let mod_list_items = mods
+            .into_iter()
+            .map(|mod_| ModListItem::new(mod_, false))
+            .collect();
         let mod_list = StatefulModList::with_items(mod_list_items);
         Some(mod_list)
     }
@@ -102,8 +101,12 @@ impl FML {
                         KeyCode::Up => self.mod_list.previous(),
                         KeyCode::Down => self.mod_list.next(),
                         KeyCode::Enter => self.mod_list.toggle_install(None),
-                        KeyCode::Char(c) => self.filter.push(c),
+                        KeyCode::Char(c) => {
+                            self.mod_list.reset_selected();
+                            self.filter.push(c);
+                        }
                         KeyCode::Backspace => {
+                            self.mod_list.reset_selected();
                             self.filter.pop();
                         }
                         _ => {}
@@ -136,11 +139,13 @@ impl FML {
     }
 
     fn draw_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let list = ModList::with_items(self.mod_list.items(&self.filter))
+        let items = self.mod_list.items(&self.filter);
+
+        let list = ModList::with_items(items)
             .block(Block::default().borders(Borders::ALL).title("Mods"))
-            .highlight_style(
-                Style::default().bg(Color::Red).add_modifier(Modifier::BOLD)
-            ).highlight_symbol(">> ").installed_symbol("✔  ");
+            .highlight_style(Style::default().bg(Color::Red).add_modifier(Modifier::BOLD))
+            .highlight_symbol(">> ")
+            .installed_symbol("✔  ");
 
         frame.render_stateful_widget(list, layout, &mut self.mod_list.state);
     }
