@@ -1,3 +1,4 @@
+mod config;
 mod factorio;
 mod fml;
 
@@ -5,8 +6,8 @@ use std::{io, panic};
 
 use anyhow::Result;
 use crossterm::event::DisableMouseCapture;
-use crossterm::{execute, cursor};
 use crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
+use crossterm::{cursor, execute};
 use fml::app::FML;
 use log::error;
 
@@ -25,8 +26,8 @@ pub fn panic_restore_terminal() {
 fn main() -> Result<()> {
     better_panic::install();
 
-    let mods_config_path = "mod-list.json";
-    let server_config_path = "server-settings.json";
+    let mut config = config::Config::default();
+    config.load_config()?;
 
     let res = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -38,8 +39,8 @@ fn main() -> Result<()> {
             }));
 
             FML::new()
-                .with_mods_config(mods_config_path)
-                .with_server_config(server_config_path)
+                .with_mods_config(&config.mods_config_path)
+                .with_server_config(&config.server_config_path)
                 .start()
                 .await
         });
