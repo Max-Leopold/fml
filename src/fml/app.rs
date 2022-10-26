@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::io;
 
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
@@ -9,7 +10,8 @@ use log::{debug, info};
 use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Layout, Rect};
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Block, Borders};
+use tui::text::{self, Spans};
+use tui::widgets::{Block, Borders, Paragraph};
 use tui::{Frame, Terminal};
 
 use crate::factorio::{api, mods_config, server_config};
@@ -85,7 +87,8 @@ impl FML {
             .map(|mod_| {
                 let mod_name = mod_.name.clone();
                 ModListItem::new(mod_, self.mods_config.enabled_mod(&mod_name))
-            }).collect();
+            })
+            .collect();
         let mod_list = StatefulModList::with_items(mod_list_items);
         Some(mod_list)
     }
@@ -107,9 +110,10 @@ impl FML {
                             let mod_ = self.mod_list.selected_mod();
                             if let Some(mod_) = mod_ {
                                 let factorio_mod = mod_.factorio_mod;
-                                self.mods_config.set_mod_enabled(&factorio_mod.name, enabled.unwrap());
+                                self.mods_config
+                                    .set_mod_enabled(&factorio_mod.name, enabled.unwrap());
                             }
-                        },
+                        }
                         KeyCode::Char(c) => {
                             self.mod_list.reset_selected();
                             self.filter.push(c);
@@ -148,6 +152,16 @@ impl FML {
     }
 
     fn draw_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
+        let chunks = Layout::default()
+            .direction(tui::layout::Direction::Horizontal)
+            .constraints(
+                [
+                    tui::layout::Constraint::Percentage(50),
+                    tui::layout::Constraint::Percentage(50),
+                ]
+                .as_ref(),
+            )
+            .split(layout);
         let items = self.mod_list.items(&self.filter);
 
         let list = ModList::with_items(items)
@@ -156,7 +170,25 @@ impl FML {
             .highlight_symbol(">> ")
             .installed_symbol("✔  ");
 
-        frame.render_stateful_widget(list, layout, &mut self.mod_list.state);
+        frame.render_stateful_widget(list, chunks[0], &mut self.mod_list.state);
+
+        let selected_mod = self.mod_list.selected_mod();
+        if let Some(selected_mod) = selected_mod {
+            let factorio_mod = selected_mod.factorio_mod;
+            let mut text = vec![
+                Spans::from(factorio_mod.title.clone()),
+                Spans::from(factorio_mod.name.clone()),
+            ];
+            let wrapped = textwrap::wrap(&factorio_mod.summary, chunks[1].width as usize - 2);
+            let description = wrapped
+                .iter()
+                .map(|s| Spans::from(s.borrow()))
+                .collect::<Vec<Spans>>();
+            text.extend(description);
+            let block = Block::default().borders(Borders::ALL).title("Mod Details");
+            let paragraph = Paragraph::new(text).block(block);
+            frame.render_widget(paragraph, chunks[1]);
+        }
     }
 
     fn draw_search_bar(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {

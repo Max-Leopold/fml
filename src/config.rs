@@ -59,7 +59,7 @@ impl Config {
             self.mods_dir_path =
                 match fs::canonicalize(mods_dir_path) {
                     Ok(path) => path.to_str().unwrap().to_string(),
-                    Err(err) => return Err(Error::from(std::io::Error::new(
+                    Err(_) => return Err(Error::from(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
                         format!(
                             "Could not find mods folder. You can use both absolute and relative paths."
@@ -81,7 +81,7 @@ impl Config {
             self.server_config_path =
                 match fs::canonicalize(&server_config_path) {
                     Ok(path) => path.to_str().unwrap().to_string(),
-                    Err(err) => return Err(Error::from(std::io::Error::new(
+                    Err(_) => return Err(Error::from(std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
                         format!(
                             "Could not find server settings file. You can use both absolute and relative paths."
