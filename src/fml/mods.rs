@@ -59,18 +59,30 @@ impl StatefulModList {
         self.state.select(Some(i));
     }
 
-    pub fn toggle_install(&mut self, index: Option<usize>) {
+    pub fn toggle_install(&mut self, index: Option<usize>) -> Option<bool> {
         let index = match index {
             Some(index) => index,
             None => match self.state.selected() {
                 Some(index) => index,
-                None => return,
+                None => return None,
             },
         };
         // Toggle installed value for the selected mod
         let mod_item = self.filtered_items.get(index).unwrap();
         let mut mod_item = mod_item.borrow_mut();
         mod_item.installed = !mod_item.installed;
+        Some(mod_item.installed)
+    }
+
+    pub fn selected_mod(&self) -> Option<ModListItem> {
+        match self.state.selected() {
+            Some(index) => {
+                let mod_item = self.filtered_items.get(index).unwrap();
+                let mod_item = mod_item.borrow();
+                Some(mod_item.clone())
+            }
+            None => None,
+        }
     }
 
     pub fn items(&mut self, filter: &String) -> Vec<ModListItem> {

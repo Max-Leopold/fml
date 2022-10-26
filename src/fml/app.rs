@@ -102,7 +102,14 @@ impl FML {
                         KeyCode::Ctrl('c') => break,
                         KeyCode::Up => self.mod_list.previous(),
                         KeyCode::Down => self.mod_list.next(),
-                        KeyCode::Enter => self.mod_list.toggle_install(None),
+                        KeyCode::Enter => {
+                            let enabled = self.mod_list.toggle_install(None);
+                            let mod_ = self.mod_list.selected_mod();
+                            if let Some(mod_) = mod_ {
+                                let factorio_mod = mod_.factorio_mod;
+                                self.mods_config.set_mod_enabled(&factorio_mod.name, enabled.unwrap());
+                            }
+                        },
                         KeyCode::Char(c) => {
                             self.mod_list.reset_selected();
                             self.filter.push(c);

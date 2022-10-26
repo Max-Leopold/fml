@@ -77,12 +77,6 @@ impl ModsConfig {
         self.mods.remove(name);
     }
 
-    pub fn enable_mod(&mut self, name: &str) {
-        if let Some(mod_config) = self.mods.get_mut(name) {
-            mod_config.enabled = true;
-        }
-    }
-
     pub fn enabled_mod(&mut self, name: &str) -> bool {
         if let Some(mod_config) = self.mods.get(name) {
             mod_config.enabled
@@ -91,10 +85,16 @@ impl ModsConfig {
         }
     }
 
-    pub fn disable_mod(&mut self, name: &str) {
+    pub fn set_mod_enabled(&mut self, name: &str, enabled: bool) {
         if let Some(mod_config) = self.mods.get_mut(name) {
-            mod_config.enabled = false;
+            mod_config.enabled = enabled;
+        } else {
+            self.mods.insert(name.to_string(), ModConfig {
+                name: name.to_string(),
+                enabled,
+            });
         }
+        self.save().unwrap();
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
