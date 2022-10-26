@@ -46,8 +46,8 @@ impl FML {
 
     pub fn with_mods_config(&mut self, mods_config_path: &str) -> &mut Self {
         debug!("Loading mods config from {}", mods_config_path);
-        self.mods_config =
-            mods_config::get_mods_config(mods_config_path).expect("Failed to load mods config");
+        self.mods_config = mods_config::ModsConfig::load_or_create(mods_config_path)
+            .expect("Failed to load mods config");
         self
     }
 
@@ -78,12 +78,14 @@ impl FML {
         Ok(())
     }
 
-    async fn generate_mod_list(&self) -> Option<StatefulModList> {
+    async fn generate_mod_list(&mut self) -> Option<StatefulModList> {
         let mods = api::get_mods(None).await.ok()?;
         let mod_list_items = mods
             .into_iter()
-            .map(|mod_| ModListItem::new(mod_, false))
-            .collect();
+            .map(|mod_| {
+                let mod_name = mod_.name.clone();
+                ModListItem::new(mod_, self.mods_config.enabled_mod(&mod_name))
+            }).collect();
         let mod_list = StatefulModList::with_items(mod_list_items);
         Some(mod_list)
     }

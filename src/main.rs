@@ -39,7 +39,7 @@ fn main() -> Result<()> {
             }));
 
             FML::new()
-                .with_mods_config(&config.mods_config_path)
+                .with_mods_config(&config.mods_dir_path)
                 .with_server_config(&config.server_config_path)
                 .start()
                 .await
