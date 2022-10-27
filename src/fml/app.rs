@@ -20,12 +20,19 @@ use super::event::{Event, Events, KeyCode};
 use super::mods::StatefulModList;
 use super::widgets::mod_list::{ModList, ModListItem};
 
+#[derive(Debug, Clone, Copy)]
+enum Tabs {
+    Manage,
+    Install,
+}
+
 pub struct FML {
     mod_list: StatefulModList,
     mods_config: mods_config::ModsConfig,
     server_config: server_config::ServerConfig,
     events: Events,
     filter: String,
+    current_tab: Tabs,
 }
 
 impl FML {
@@ -36,6 +43,7 @@ impl FML {
             server_config: server_config::ServerConfig::default(),
             events: Events::with_config(None),
             filter: String::new(),
+            current_tab: Tabs::Manage,
         }
     }
 
@@ -122,6 +130,14 @@ impl FML {
                             self.mod_list.reset_selected();
                             self.filter.pop();
                         }
+                        KeyCode::Tab => {
+                            self.mod_list.reset_selected();
+                            self.filter.clear();
+                            match self.current_tab {
+                                Tabs::Manage => self.current_tab = Tabs::Install,
+                                Tabs::Install => self.current_tab = Tabs::Manage,
+                            }
+                        }
                         _ => {}
                     },
                     Event::Tick => {
@@ -136,6 +152,47 @@ impl FML {
 
     fn draw(&mut self, frame: &mut Frame<impl Backend>) {
         let rect = frame.size();
+        let chunks = Layout::default()
+            .direction(tui::layout::Direction::Vertical)
+            .constraints(
+                [
+                    tui::layout::Constraint::Length(3),
+                    tui::layout::Constraint::Min(0),
+                ]
+                .as_ref(),
+            )
+            .split(rect);
+
+        self.draw_tabs(frame, chunks[0]);
+        match self.current_tab {
+            Tabs::Manage => self.draw_manage_tab(frame, chunks[1]),
+            Tabs::Install => self.draw_install_tab(frame, chunks[1]),
+        }
+    }
+
+    fn draw_tabs(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
+        let tabs = vec!["Manage", "Install"];
+        let tabs = tabs
+            .iter()
+            .enumerate()
+            .map(|(_, t)| Spans::from(*t))
+            .collect();
+
+        let tabs = tui::widgets::Tabs::new(tabs)
+            .block(Block::default().borders(Borders::ALL).title("Tabs"))
+            .select(self.current_tab as usize)
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().fg(Color::Yellow));
+
+        frame.render_widget(tabs, rect);
+    }
+
+    fn draw_manage_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
+        let block = Block::default().borders(Borders::ALL).title("Manage");
+        frame.render_widget(block, rect);
+    }
+
+    fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
         let chunks = Layout::default()
             .direction(tui::layout::Direction::Vertical)
             .constraints(
@@ -166,7 +223,7 @@ impl FML {
 
         let list = ModList::with_items(items)
             .block(Block::default().borders(Borders::ALL).title("Mods"))
-            .highlight_style(Style::default().bg(Color::Red).add_modifier(Modifier::BOLD))
+            .highlight_style(Style::default().fg(Color::Yellow))
             .highlight_symbol(">> ")
             .installed_symbol("✔  ");
 
