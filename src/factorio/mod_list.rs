@@ -1,19 +1,12 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default)]
-pub struct ModsConfig {
-    mods: HashMap<String, ModConfig>,
+pub struct ModList {
+    mods: HashMap<String, ModEntry>,
     file_path: String,
-}
-
-#[derive(Debug, Default)]
-pub struct ModConfig {
-    pub name: String,
-    pub enabled: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -29,8 +22,8 @@ struct ModEntry {
     pub enabled: bool,
 }
 
-impl ModsConfig {
-    pub fn load_or_create(mods_dir_path: &str) -> Result<ModsConfig, Box<dyn std::error::Error>> {
+impl ModList {
+    pub fn load_or_create(mods_dir_path: &str) -> Result<ModList, Box<dyn std::error::Error>> {
         let file_path = Path::new(mods_dir_path).join("mod-list.json");
         if file_path.exists() {
             let mods = std::fs::read_to_string(&file_path)?;
@@ -38,14 +31,12 @@ impl ModsConfig {
                 Ok(mods) => mods,
                 Err(err) => return Err(Box::new(err)),
             };
-            let map = HashMap::from_iter(internal_mod_config.mods.into_iter().map(|mod_entry| {
-                let mod_config = ModConfig {
-                    name: mod_entry.name,
-                    enabled: mod_entry.enabled,
-                };
-                (mod_config.name.clone(), mod_config)
-            }));
-            let config = ModsConfig {
+            let map = internal_mod_config
+                .mods
+                .into_iter()
+                .map(|mod_entry| (mod_entry.name.clone(), mod_entry))
+                .collect();
+            let config = ModList {
                 file_path: file_path.to_str().unwrap().to_string(),
                 mods: map,
             };
@@ -53,11 +44,14 @@ impl ModsConfig {
         } else {
             let mut map = HashMap::new();
             // Insert the base mod, which is always enabled and present
-            map.insert("base".to_string(), ModConfig {
-                name: "base".to_string(),
-                enabled: true,
-            });
-            let config = ModsConfig {
+            map.insert(
+                "base".to_string(),
+                ModEntry {
+                    name: "base".to_string(),
+                    enabled: true,
+                },
+            );
+            let config = ModList {
                 file_path: file_path.to_str().unwrap().to_string(),
                 mods: HashMap::new(),
             };
@@ -66,18 +60,7 @@ impl ModsConfig {
         }
     }
 
-    pub fn add_mod(&mut self, name: &str) {
-        self.mods.insert(name.to_string(), ModConfig {
-            name: name.to_string(),
-            enabled: true,
-        });
-    }
-
-    pub fn remove_mod(&mut self, name: &str) {
-        self.mods.remove(name);
-    }
-
-    pub fn enabled_mod(&mut self, name: &str) -> bool {
+    pub fn mod_is_enabled(&mut self, name: &str) -> bool {
         if let Some(mod_config) = self.mods.get(name) {
             mod_config.enabled
         } else {
@@ -89,20 +72,27 @@ impl ModsConfig {
         if let Some(mod_config) = self.mods.get_mut(name) {
             mod_config.enabled = enabled;
         } else {
-            self.mods.insert(name.to_string(), ModConfig {
-                name: name.to_string(),
-                enabled,
-            });
+            self.mods.insert(
+                name.to_string(),
+                ModEntry {
+                    name: name.to_string(),
+                    enabled,
+                },
+            );
         }
         self.save().unwrap();
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let internal_mod_config = InternalModsConfig {
-            mods: self.mods.values().map(|mod_config| ModEntry {
-                name: mod_config.name.clone(),
-                enabled: mod_config.enabled,
-            }).collect(),
+            mods: self
+                .mods
+                .values()
+                .map(|mod_config| ModEntry {
+                    name: mod_config.name.clone(),
+                    enabled: mod_config.enabled,
+                })
+                .collect(),
         };
         let json = serde_json::to_string_pretty(&internal_mod_config)?;
         std::fs::write(&self.file_path, json)?;

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{anyhow, Result, Error};
+use anyhow::{anyhow, Error, Result};
 use serde::{Deserialize, Serialize};
 
 const CONFIG_DIR: &str = ".config";
@@ -11,12 +11,12 @@ const DEFAULT_MODS_DIR_PATH: &str = "/opt/factorio/mods/";
 const DEFAULT_SERVER_CONFIG_PATH: &str = "/opt/factorio/config/server-settings.json";
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Config {
+pub struct FmlConfig {
     pub mods_dir_path: String,
     pub server_config_path: String,
 }
 
-impl Config {
+impl FmlConfig {
     pub fn load_config(&mut self) -> Result<()> {
         let config_path = match dirs::home_dir() {
             Some(path) => {
@@ -35,7 +35,7 @@ impl Config {
 
         if config_path.exists() {
             let config = std::fs::read_to_string(&config_path)?;
-            let config_yml: Config = match serde_yaml::from_str(&config) {
+            let config_yml: FmlConfig = match serde_yaml::from_str(&config) {
                 Ok(config) => config,
                 Err(err) => return Err(anyhow!("Could not parse config file: {}", err)),
             };
@@ -56,16 +56,15 @@ impl Config {
             if mods_dir_path.is_empty() {
                 mods_dir_path = DEFAULT_MODS_DIR_PATH.to_string();
             }
-            self.mods_dir_path =
-                match fs::canonicalize(mods_dir_path) {
-                    Ok(path) => path.to_str().unwrap().to_string(),
-                    Err(_) => return Err(Error::from(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        format!(
-                            "Could not find mods folder. You can use both absolute and relative paths."
-                        ),
-                    ))),
-                };
+            self.mods_dir_path = match fs::canonicalize(mods_dir_path) {
+                Ok(path) => path.to_str().unwrap().to_string(),
+                Err(_) => return Err(Error::from(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "Could not find mods folder. You can use both absolute and relative paths."
+                    ),
+                ))),
+            };
             println!("Using mods folder at: {}", self.mods_dir_path);
 
             println!(

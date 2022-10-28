@@ -1,6 +1,6 @@
-mod config;
 mod factorio;
 mod fml;
+mod fml_config;
 
 use std::{io, panic};
 
@@ -26,7 +26,7 @@ pub fn panic_restore_terminal() {
 fn main() -> Result<()> {
     better_panic::install();
 
-    let mut config = config::Config::default();
+    let mut config = fml_config::FmlConfig::default();
     config.load_config()?;
 
     let res = tokio::runtime::Builder::new_multi_thread()
@@ -38,11 +38,7 @@ fn main() -> Result<()> {
                 better_panic::Settings::auto().create_panic_handler()(panic_info);
             }));
 
-            FML::new()
-                .with_mods_config(&config.mods_dir_path)
-                .with_server_config(&config.server_config_path)
-                .start()
-                .await
+            FML::new(config).await.start().await
         });
 
     if let Err(err) = res {

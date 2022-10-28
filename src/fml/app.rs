@@ -9,12 +9,13 @@ use crossterm::terminal::{
 use log::{debug, info};
 use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Layout, Rect};
-use tui::style::{Color, Modifier, Style};
-use tui::text::{self, Spans};
+use tui::style::{Color, Style};
+use tui::text::Spans;
 use tui::widgets::{Block, Borders, Paragraph};
 use tui::{Frame, Terminal};
 
-use crate::factorio::{api, mods_config, server_config};
+use crate::factorio::{api, mod_list, server_settings};
+use crate::fml_config::{self, FmlConfig};
 
 use super::event::{Event, Events, KeyCode};
 use super::mods::StatefulModList;
@@ -27,46 +28,49 @@ enum Tabs {
 }
 
 pub struct FML {
-    mod_list: StatefulModList,
-    mods_config: mods_config::ModsConfig,
-    server_config: server_config::ServerConfig,
+    stateful_mod_list: StatefulModList,
+    mod_list: mod_list::ModList,
+    server_settings: server_settings::ServerSettings,
     events: Events,
     filter: String,
     current_tab: Tabs,
 }
 
 impl FML {
-    pub fn new() -> Self {
-        Self {
-            mod_list: StatefulModList::default(),
-            mods_config: mods_config::ModsConfig::default(),
-            server_config: server_config::ServerConfig::default(),
-            events: Events::with_config(None),
-            filter: String::new(),
-            current_tab: Tabs::Manage,
+    pub async fn new(fml_config: FmlConfig) -> Self {
+        let mod_list = mod_list::ModList::load_or_create(&fml_config.mods_dir_path).unwrap();
+        let server_settings =
+            server_settings::get_server_settings(&fml_config.server_config_path).unwrap();
+        let stateful_mod_list = Self::generate_mod_list().await.unwrap();
+        let events = Events::with_config(None);
+        let filter = String::new();
+        let current_tab = Tabs::Manage;
+
+        FML {
+            stateful_mod_list,
+            mod_list,
+            server_settings,
+            events,
+            filter,
+            current_tab,
         }
     }
 
-    pub fn with_server_config(&mut self, server_config_path: &str) -> &mut Self {
-        debug!("Loading server config from {}", server_config_path);
-        self.server_config = server_config::get_server_config(server_config_path)
-            .expect("Failed to load server config");
-        self
-    }
-
-    pub fn with_mods_config(&mut self, mods_config_path: &str) -> &mut Self {
-        debug!("Loading mods config from {}", mods_config_path);
-        self.mods_config = mods_config::ModsConfig::load_or_create(mods_config_path)
-            .expect("Failed to load mods config");
-        self
+    async fn generate_mod_list() -> Option<StatefulModList> {
+        let mods = api::get_mods(None).await.ok()?;
+        let mod_list_items = mods
+            .into_iter()
+            .map(|mod_| {
+                let mod_name = mod_.name.clone();
+                ModListItem::new(mod_, false)
+            })
+            .collect();
+        let mod_list = StatefulModList::with_items(mod_list_items);
+        Some(mod_list)
     }
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("Starting FML!");
-        self.mod_list = self
-            .generate_mod_list()
-            .await
-            .expect("Failed to generate mod list");
 
         enable_raw_mode()?;
         let mut stdout = io::stdout();
@@ -88,19 +92,6 @@ impl FML {
         Ok(())
     }
 
-    async fn generate_mod_list(&mut self) -> Option<StatefulModList> {
-        let mods = api::get_mods(None).await.ok()?;
-        let mod_list_items = mods
-            .into_iter()
-            .map(|mod_| {
-                let mod_name = mod_.name.clone();
-                ModListItem::new(mod_, self.mods_config.enabled_mod(&mod_name))
-            })
-            .collect();
-        let mod_list = StatefulModList::with_items(mod_list_items);
-        Some(mod_list)
-    }
-
     pub async fn run<B: Backend>(
         &mut self,
         terminal: &mut Terminal<B>,
@@ -111,27 +102,27 @@ impl FML {
                 match event {
                     Event::Input(input) => match input {
                         KeyCode::Ctrl('c') => break,
-                        KeyCode::Up => self.mod_list.previous(),
-                        KeyCode::Down => self.mod_list.next(),
+                        KeyCode::Up => self.stateful_mod_list.previous(),
+                        KeyCode::Down => self.stateful_mod_list.next(),
                         KeyCode::Enter => {
-                            let enabled = self.mod_list.toggle_install(None);
-                            let mod_ = self.mod_list.selected_mod();
+                            let enabled = self.stateful_mod_list.toggle_install(None);
+                            let mod_ = self.stateful_mod_list.selected_mod();
                             if let Some(mod_) = mod_ {
                                 let factorio_mod = mod_.factorio_mod;
-                                self.mods_config
+                                self.mod_list
                                     .set_mod_enabled(&factorio_mod.name, enabled.unwrap());
                             }
                         }
                         KeyCode::Char(c) => {
-                            self.mod_list.reset_selected();
+                            self.stateful_mod_list.reset_selected();
                             self.filter.push(c);
                         }
                         KeyCode::Backspace => {
-                            self.mod_list.reset_selected();
+                            self.stateful_mod_list.reset_selected();
                             self.filter.pop();
                         }
                         KeyCode::Tab => {
-                            self.mod_list.reset_selected();
+                            self.stateful_mod_list.reset_selected();
                             self.filter.clear();
                             match self.current_tab {
                                 Tabs::Manage => self.current_tab = Tabs::Install,
@@ -219,7 +210,7 @@ impl FML {
                 .as_ref(),
             )
             .split(layout);
-        let items = self.mod_list.items(&self.filter);
+        let items = self.stateful_mod_list.items(&self.filter);
 
         let list = ModList::with_items(items)
             .block(Block::default().borders(Borders::ALL).title("Mods"))
@@ -227,9 +218,9 @@ impl FML {
             .highlight_symbol(">> ")
             .installed_symbol("✔  ");
 
-        frame.render_stateful_widget(list, chunks[0], &mut self.mod_list.state);
+        frame.render_stateful_widget(list, chunks[0], &mut self.stateful_mod_list.state);
 
-        let selected_mod = self.mod_list.selected_mod();
+        let selected_mod = self.stateful_mod_list.selected_mod();
         if let Some(selected_mod) = selected_mod {
             let factorio_mod = selected_mod.factorio_mod;
             let mut text = vec![
