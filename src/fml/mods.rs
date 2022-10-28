@@ -1,29 +1,20 @@
 use super::widgets::mod_list::{ListState, ModListItem};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
 pub struct StatefulModList {
     pub state: ListState,
-    items: Vec<Rc<RefCell<ModListItem>>>,
-    filtered_items: Vec<Rc<RefCell<ModListItem>>>,
+    items: Vec<Arc<Mutex<ModListItem>>>,
+    filtered_items: Vec<Arc<Mutex<ModListItem>>>,
 }
 
 impl StatefulModList {
-    pub fn with_items(items: Vec<ModListItem>) -> StatefulModList {
-        let state = ListState::default();
-        let items: Vec<Rc<RefCell<ModListItem>>> = items
+    pub fn set_items(&mut self, items: Vec<ModListItem>) {
+        self.items = items
             .into_iter()
-            .map(|item| Rc::new(RefCell::new(item)))
+            .map(|item| Arc::new(Mutex::new(item)))
             .collect();
-
-        let filtered_items = items.clone();
-
-        StatefulModList {
-            state,
-            items,
-            filtered_items,
-        }
+        self.filtered_items = self.items.clone();
     }
 
     pub fn reset_selected(&mut self) {
@@ -69,7 +60,7 @@ impl StatefulModList {
         };
         // Toggle installed value for the selected mod
         let mod_item = self.filtered_items.get(index).unwrap();
-        let mut mod_item = mod_item.borrow_mut();
+        let mut mod_item = mod_item.lock().unwrap();
         mod_item.installed = !mod_item.installed;
         Some(mod_item.installed)
     }
@@ -78,7 +69,7 @@ impl StatefulModList {
         match self.state.selected() {
             Some(index) => {
                 let mod_item = self.filtered_items.get(index).unwrap();
-                let mod_item = mod_item.borrow();
+                let mod_item = mod_item.lock().unwrap();
                 Some(mod_item.clone())
             }
             None => None,
@@ -90,7 +81,8 @@ impl StatefulModList {
             .items
             .iter()
             .filter(|item| {
-                item.borrow()
+                item.lock()
+                    .unwrap()
                     .factorio_mod
                     .name
                     .to_lowercase()
@@ -101,7 +93,7 @@ impl StatefulModList {
 
         self.filtered_items
             .iter()
-            .map(|item| item.borrow().clone())
+            .map(|item| item.lock().unwrap().clone())
             .collect()
     }
 }
