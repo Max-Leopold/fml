@@ -9,7 +9,7 @@ use crossterm::terminal::{
 };
 use log::info;
 use tui::backend::{Backend, CrosstermBackend};
-use tui::layout::{Layout, Rect};
+use tui::layout::{Alignment, Layout, Rect};
 use tui::style::{Color, Style};
 use tui::text::Spans;
 use tui::widgets::{Block, Borders, Paragraph};
@@ -20,6 +20,7 @@ use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
 use super::mods::StatefulModList;
+use super::widgets::loading::{self, Loading};
 use super::widgets::mod_list::{ModList, ModListItem};
 
 #[derive(Debug, Clone, Copy)]
@@ -113,11 +114,8 @@ impl FML {
                             self.stateful_mod_list.lock().unwrap().next();
                         }
                         KeyCode::Enter => {
-                            let enabled = self
-                                .stateful_mod_list
-                                .lock()
-                                .unwrap()
-                                .toggle_install(None);
+                            let enabled =
+                                self.stateful_mod_list.lock().unwrap().toggle_install(None);
                             let mod_ = self.stateful_mod_list.lock().unwrap().selected_mod();
                             if let Some(mod_) = mod_ {
                                 let factorio_mod = mod_.factorio_mod;
@@ -196,6 +194,12 @@ impl FML {
     }
 
     fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
+        if !(self.stateful_mod_list.lock().unwrap().is_ready()) {
+            let loading = Loading::default().block(Block::default().borders(Borders::ALL).title("Mods"));
+            frame.render_widget(loading, rect);
+            return;
+        }
+
         let chunks = Layout::default()
             .direction(tui::layout::Direction::Vertical)
             .constraints(

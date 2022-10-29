@@ -4,17 +4,23 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Default)]
 pub struct StatefulModList {
     pub state: ListState,
-    items: Vec<Arc<Mutex<ModListItem>>>,
-    filtered_items: Vec<Arc<Mutex<ModListItem>>>,
+    items: Option<Vec<Arc<Mutex<ModListItem>>>>,
+    filtered_items: Option<Vec<Arc<Mutex<ModListItem>>>>,
 }
 
 impl StatefulModList {
     pub fn set_items(&mut self, items: Vec<ModListItem>) {
-        self.items = items
-            .into_iter()
-            .map(|item| Arc::new(Mutex::new(item)))
-            .collect();
+        self.items = Some(
+            items
+                .into_iter()
+                .map(|item| Arc::new(Mutex::new(item)))
+                .collect(),
+        );
         self.filtered_items = self.items.clone();
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.items.is_some()
     }
 
     pub fn reset_selected(&mut self) {
@@ -22,9 +28,13 @@ impl StatefulModList {
     }
 
     pub fn next(&mut self) {
+        if let None = self.filtered_items {
+            return;
+        }
+
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.items.len() - 1 {
+                if i >= self.filtered_items.as_ref().unwrap().len() - 1 {
                     0
                 } else {
                     i + 1
@@ -37,10 +47,14 @@ impl StatefulModList {
     }
 
     pub fn previous(&mut self) {
+        if let None = self.filtered_items {
+            return;
+        }
+
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.filtered_items.as_ref().unwrap().len() - 1
                 } else {
                     i - 1
                 }
@@ -51,6 +65,10 @@ impl StatefulModList {
     }
 
     pub fn toggle_install(&mut self, index: Option<usize>) -> Option<bool> {
+        if let None = self.filtered_items {
+            return None;
+        }
+
         let index = match index {
             Some(index) => index,
             None => match self.state.selected() {
@@ -59,16 +77,20 @@ impl StatefulModList {
             },
         };
         // Toggle installed value for the selected mod
-        let mod_item = self.filtered_items.get(index).unwrap();
+        let mod_item = self.filtered_items.as_ref().unwrap().get(index).unwrap();
         let mut mod_item = mod_item.lock().unwrap();
         mod_item.installed = !mod_item.installed;
         Some(mod_item.installed)
     }
 
     pub fn selected_mod(&self) -> Option<ModListItem> {
+        if let None = self.filtered_items {
+            return None;
+        }
+
         match self.state.selected() {
             Some(index) => {
-                let mod_item = self.filtered_items.get(index).unwrap();
+                let mod_item = self.filtered_items.as_ref().unwrap().get(index).unwrap();
                 let mod_item = mod_item.lock().unwrap();
                 Some(mod_item.clone())
             }
@@ -77,21 +99,28 @@ impl StatefulModList {
     }
 
     pub fn items(&mut self, filter: &String) -> Vec<ModListItem> {
-        self.filtered_items = self
-            .items
-            .iter()
-            .filter(|item| {
-                item.lock()
-                    .unwrap()
-                    .factorio_mod
-                    .name
-                    .to_lowercase()
-                    .contains(&filter.to_lowercase())
-            })
-            .map(|item| item.clone())
-            .collect();
+        if let None = self.items {
+            return vec![];
+        }
 
-        self.filtered_items
+        self.filtered_items = Some(
+            self.items.as_ref()
+                .unwrap()
+                .iter()
+                .filter(|item| {
+                    item.lock()
+                        .unwrap()
+                        .factorio_mod
+                        .name
+                        .to_lowercase()
+                        .contains(&filter.to_lowercase())
+                })
+                .map(|item| item.clone())
+                .collect(),
+        );
+
+        self.filtered_items.as_ref()
+            .unwrap()
             .iter()
             .map(|item| item.lock().unwrap().clone())
             .collect()
