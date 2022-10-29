@@ -36,10 +36,11 @@ pub struct FML {
     events: Events,
     filter: String,
     current_tab: Tabs,
+    ticks: u64,
 }
 
 impl FML {
-    pub async fn new(fml_config: FmlConfig) -> Self {
+    pub async fn new(fml_config: FmlConfig) -> FML {
         let mod_list = mod_list::ModList::load_or_create(&fml_config.mods_dir_path).unwrap();
         let server_settings =
             server_settings::get_server_settings(&fml_config.server_config_path).unwrap();
@@ -54,6 +55,7 @@ impl FML {
         let events = Events::with_config(None);
         let filter = String::new();
         let current_tab = Tabs::Manage;
+        let ticks = 0;
 
         FML {
             stateful_mod_list,
@@ -62,6 +64,7 @@ impl FML {
             events,
             filter,
             current_tab,
+            ticks,
         }
     }
 
@@ -143,6 +146,7 @@ impl FML {
                     },
                     Event::Tick => {
                         // If we ever need to do some recurring task every tick we can call it here
+                        self.ticks += 1;
                     }
                 }
             }
@@ -195,7 +199,15 @@ impl FML {
 
     fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
         if !(self.stateful_mod_list.lock().unwrap().is_ready()) {
-            let loading = Loading::default().block(Block::default().borders(Borders::ALL).title("Mods"));
+            let loading = Loading::new()
+                .block(Block::default().borders(Borders::ALL).title("Mods"))
+                .ticks(self.ticks)
+                .loading_symbols(vec![
+                    "Loading",
+                    "Loading.",
+                    "Loading..",
+                    "Loading...",
+                ]);
             frame.render_widget(loading, rect);
             return;
         }
