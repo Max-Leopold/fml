@@ -247,6 +247,10 @@ impl FML {
             &mut self.stateful_mod_list.lock().unwrap().state,
         );
 
+        self.draw_mod_details(frame, chunks[1]);
+    }
+
+    fn draw_mod_details(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
         let selected_mod = self.stateful_mod_list.lock().unwrap().selected_mod();
         if let Some(selected_mod) = selected_mod {
             if !(selected_mod.lock().unwrap().loading) {
@@ -256,7 +260,7 @@ impl FML {
                 tokio::spawn(async move {
                     let name = selected_mod.lock().unwrap().factorio_mod.name.clone();
                     // Small debounce so we don't spam the api
-                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    tokio::time::sleep(Duration::from_millis(1000)).await;
                     let new_selected_mod = stateful_mod_list.lock().unwrap().selected_mod();
                     if let Some(new_selected_mod) = new_selected_mod {
                         if new_selected_mod.lock().unwrap().factorio_mod.name == name {
@@ -287,13 +291,13 @@ impl FML {
                 ];
                 let text = Paragraph::new(text)
                     .block(Block::default().borders(Borders::ALL).title("Mod Info"));
-                frame.render_widget(text, chunks[1]);
+                frame.render_widget(text, layout);
             } else {
                 let loading = Loading::new()
                     .block(Block::default().borders(Borders::ALL).title("Mod Info"))
                     .ticks(self.ticks)
                     .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
-                frame.render_widget(loading, chunks[1]);
+                frame.render_widget(loading, layout);
             }
         }
     }
