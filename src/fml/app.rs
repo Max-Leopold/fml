@@ -12,13 +12,14 @@ use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Layout, Rect};
 use tui::style::{Color, Style};
 use tui::text::Spans;
-use tui::widgets::{Block, Borders, Paragraph};
+use tui::widgets::{Block, Borders, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
 use crate::factorio::{api, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
+use super::markdown;
 use super::mods::StatefulModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
@@ -285,12 +286,17 @@ impl FML {
 
             if selected_mod.lock().unwrap().factorio_mod.full == Some(true) {
                 let mod_ = selected_mod.lock().unwrap().factorio_mod.clone();
-                let text = vec![
-                    Spans::from(mod_.title),
-                    Spans::from(mod_.description.unwrap_or("".to_string())),
+                let mut text = vec![
+                    Spans::from(format!("Name:      {}", mod_.title)),
+                    Spans::from(format!("Downloads: {}", mod_.downloads_count)),
+                    Spans::from("".to_string()),
                 ];
+                let description = mod_.description.unwrap_or("".to_string());
+                let mut desc = markdown::Parser::new(&description).to_spans();
+                text.append(&mut desc);
                 let text = Paragraph::new(text)
-                    .block(Block::default().borders(Borders::ALL).title("Mod Info"));
+                    .block(Block::default().borders(Borders::ALL).title("Mod Info"))
+                    .wrap(Wrap { trim: true });
                 frame.render_widget(text, layout);
             } else {
                 let loading = Loading::new()

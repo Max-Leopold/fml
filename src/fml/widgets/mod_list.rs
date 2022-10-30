@@ -59,7 +59,7 @@ impl ModListItem {
     }
 
     pub fn content(&self) -> Text {
-        self.factorio_mod.name.clone().into()
+        self.factorio_mod.title.clone().into()
     }
 }
 
