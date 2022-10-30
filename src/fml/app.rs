@@ -1,6 +1,6 @@
-use std::borrow::Borrow;
 use std::io;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
@@ -9,7 +9,7 @@ use crossterm::terminal::{
 };
 use log::info;
 use tui::backend::{Backend, CrosstermBackend};
-use tui::layout::{Alignment, Layout, Rect};
+use tui::layout::{Layout, Rect};
 use tui::style::{Color, Style};
 use tui::text::Spans;
 use tui::widgets::{Block, Borders, Paragraph};
@@ -20,7 +20,7 @@ use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
 use super::mods::StatefulModList;
-use super::widgets::loading::{self, Loading};
+use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
 
 #[derive(Debug, Clone, Copy)]
@@ -121,7 +121,7 @@ impl FML {
                                 self.stateful_mod_list.lock().unwrap().toggle_install(None);
                             let mod_ = self.stateful_mod_list.lock().unwrap().selected_mod();
                             if let Some(mod_) = mod_ {
-                                let factorio_mod = mod_.factorio_mod;
+                                let factorio_mod = &mod_.lock().unwrap().factorio_mod;
                                 self.mod_list
                                     .set_mod_enabled(&factorio_mod.name, enabled.unwrap());
                             }
@@ -202,12 +202,7 @@ impl FML {
             let loading = Loading::new()
                 .block(Block::default().borders(Borders::ALL).title("Mods"))
                 .ticks(self.ticks)
-                .loading_symbols(vec![
-                    "Loading",
-                    "Loading.",
-                    "Loading..",
-                    "Loading...",
-                ]);
+                .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
             frame.render_widget(loading, rect);
             return;
         }
@@ -254,20 +249,52 @@ impl FML {
 
         let selected_mod = self.stateful_mod_list.lock().unwrap().selected_mod();
         if let Some(selected_mod) = selected_mod {
-            let factorio_mod = selected_mod.factorio_mod;
-            let mut text = vec![
-                Spans::from(factorio_mod.title.clone()),
-                Spans::from(factorio_mod.name.clone()),
-            ];
-            let wrapped = textwrap::wrap(&factorio_mod.summary, chunks[1].width as usize - 2);
-            let description = wrapped
-                .iter()
-                .map(|s| Spans::from(s.borrow()))
-                .collect::<Vec<Spans>>();
-            text.extend(description);
-            let block = Block::default().borders(Borders::ALL).title("Mod Details");
-            let paragraph = Paragraph::new(text).block(block);
-            frame.render_widget(paragraph, chunks[1]);
+            if !(selected_mod.lock().unwrap().loading) {
+                selected_mod.lock().unwrap().loading = true;
+                let selected_mod = selected_mod.clone();
+                let stateful_mod_list = self.stateful_mod_list.clone();
+                tokio::spawn(async move {
+                    let name = selected_mod.lock().unwrap().factorio_mod.name.clone();
+                    // Small debounce so we don't spam the api
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    let new_selected_mod = stateful_mod_list.lock().unwrap().selected_mod();
+                    if let Some(new_selected_mod) = new_selected_mod {
+                        if new_selected_mod.lock().unwrap().factorio_mod.name == name {
+                            // Load full mod information from api
+                            match api::get_mod(&name).await {
+                                Ok(mod_) => {
+                                    selected_mod.lock().unwrap().factorio_mod = mod_;
+                                }
+                                Err(err) => {
+                                    selected_mod.lock().unwrap().loading = false;
+                                    panic!("{}", err);
+                                }
+                            }
+                        } else {
+                            selected_mod.lock().unwrap().loading = false;
+                        }
+                    } else {
+                        selected_mod.lock().unwrap().loading = false;
+                    }
+                });
+            }
+
+            if selected_mod.lock().unwrap().factorio_mod.full == Some(true) {
+                let mod_ = selected_mod.lock().unwrap().factorio_mod.clone();
+                let text = vec![
+                    Spans::from(mod_.title),
+                    Spans::from(mod_.description.unwrap_or("".to_string())),
+                ];
+                let text = Paragraph::new(text)
+                    .block(Block::default().borders(Borders::ALL).title("Mod Info"));
+                frame.render_widget(text, chunks[1]);
+            } else {
+                let loading = Loading::new()
+                    .block(Block::default().borders(Borders::ALL).title("Mod Info"))
+                    .ticks(self.ticks)
+                    .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
+                frame.render_widget(loading, chunks[1]);
+            }
         }
     }
 

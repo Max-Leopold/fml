@@ -1,7 +1,7 @@
 use tui::buffer::Buffer;
 use tui::layout::Rect;
 use tui::style::Style;
-use tui::text::{Text, Span};
+use tui::text::Span;
 use tui::widgets::{Block, Widget};
 
 #[derive(Debug, Clone)]

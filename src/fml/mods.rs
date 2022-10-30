@@ -83,7 +83,7 @@ impl StatefulModList {
         Some(mod_item.installed)
     }
 
-    pub fn selected_mod(&self) -> Option<ModListItem> {
+    pub fn selected_mod(&self) -> Option<Arc<Mutex<ModListItem>>> {
         if let None = self.filtered_items {
             return None;
         }
@@ -91,7 +91,6 @@ impl StatefulModList {
         match self.state.selected() {
             Some(index) => {
                 let mod_item = self.filtered_items.as_ref().unwrap().get(index).unwrap();
-                let mod_item = mod_item.lock().unwrap();
                 Some(mod_item.clone())
             }
             None => None,

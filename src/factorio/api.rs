@@ -25,43 +25,25 @@ impl Mods {
 pub struct Mod {
     pub name: String,
     pub title: String,
-    pub owner: String,
     pub summary: String,
+    pub description: Option<String>,
     #[serde(rename = "downloads_count")]
     pub downloads_count: i64,
     pub category: Option<String>,
-    pub score: f64,
-    #[serde(rename = "latest_release")]
-    pub latest_release: Option<LatestRelease>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LatestRelease {
-    #[serde(rename = "download_url")]
-    pub download_url: String,
-    #[serde(rename = "file_name")]
-    pub file_name: String,
-    #[serde(rename = "info_json")]
-    pub info_json: InfoJson,
-    #[serde(rename = "released_at")]
-    pub released_at: String,
-    pub version: String,
-    pub sha1: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InfoJson {
-    #[serde(rename = "factorio_version")]
-    pub factorio_version: String,
+    pub full: Option<bool>,
 }
 
 pub async fn get_mods(sort_by: Option<SortBy>) -> Result<Vec<Mod>, Box<dyn std::error::Error>> {
     let url = "https://mods.factorio.com/api/mods?page_size=max";
-    let body = reqwest::get(url).await?.text().await?;
-    let mut mods: Mods = serde_json::from_str(&body)?;
+    let mut mods = reqwest::get(url).await?.json::<Mods>().await?;
     let sort_by = sort_by.unwrap_or(SortBy::Downloads);
     mods.sort(sort_by);
     Ok(mods.results)
+}
+
+pub async fn get_mod(name: &str) -> Result<Mod, reqwest::Error> {
+    let url = format!("https://mods.factorio.com/api/mods/{}/full", name);
+    let mut response = reqwest::get(url).await?.json::<Mod>().await?;
+    response.full = Some(true);
+    Ok(response)
 }

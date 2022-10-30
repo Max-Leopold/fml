@@ -30,6 +30,7 @@ impl ListState {
 pub struct ModListItem {
     pub factorio_mod: Mod,
     pub installed: bool,
+    pub loading: bool,
     style: Style,
 }
 
@@ -39,6 +40,7 @@ impl ModListItem {
             factorio_mod,
             style: Style::default(),
             installed,
+            loading: false,
         }
     }
 
