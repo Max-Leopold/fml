@@ -84,13 +84,15 @@ impl StatefulModList {
         }
 
         self.filtered_items = Some(
-            self.items.as_ref()
+            self.items
+                .as_ref()
                 .unwrap()
                 .iter()
                 .filter(|item| {
                     item.lock()
                         .unwrap()
-                        .factorio_mod
+                        .mod_item
+                        .mod_
                         .name
                         .to_lowercase()
                         .contains(&filter.to_lowercase())
@@ -99,7 +101,8 @@ impl StatefulModList {
                 .collect(),
         );
 
-        self.filtered_items.as_ref()
+        self.filtered_items
+            .as_ref()
             .unwrap()
             .iter()
             .map(|item| item.lock().unwrap().clone())

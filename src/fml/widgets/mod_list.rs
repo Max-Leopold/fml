@@ -5,7 +5,7 @@ use tui::text::Text;
 use tui::widgets::{Block, StatefulWidget, Widget};
 use unicode_width::UnicodeWidthStr;
 
-use crate::factorio::api::Mod;
+use crate::fml::app::ModItem;
 
 #[derive(Debug, Clone, Default)]
 pub struct ListState {
@@ -28,18 +28,16 @@ impl ListState {
 
 #[derive(Debug, Clone)]
 pub struct ModListItem {
-    pub factorio_mod: Mod,
+    pub mod_item: ModItem,
     pub loading: bool,
-    pub installed_percentage: u16,
     style: Style,
 }
 
 impl ModListItem {
-    pub fn new(factorio_mod: Mod, installed: bool) -> ModListItem {
+    pub fn new(mod_item: ModItem) -> ModListItem {
         ModListItem {
-            factorio_mod,
+            mod_item,
             style: Style::default(),
-            installed_percentage: 0,
             loading: false,
         }
     }
@@ -54,7 +52,7 @@ impl ModListItem {
     }
 
     pub fn content(&self) -> Text {
-        self.factorio_mod.title.clone().into()
+        self.mod_item.mod_.title.clone().into()
     }
 }
 
@@ -249,7 +247,7 @@ impl<'a> StatefulWidget for ModList<'a> {
                     &blank_symbol
                 };
 
-                let symbol = if item.installed_percentage == 100 {
+                let symbol = if item.mod_item.downloaded {
                     installed_symbol
                 } else {
                     symbol

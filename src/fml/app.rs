@@ -30,6 +30,14 @@ enum Tabs {
     Install,
 }
 
+#[derive(Debug, Clone)]
+pub struct ModItem {
+    pub mod_: api::Mod,
+    pub downloaded: bool,
+    pub downloading: bool,
+    pub download_perc: u16,
+}
+
 pub struct FML {
     stateful_mod_list: Arc<Mutex<StatefulModList>>,
     mod_list: mod_list::ModList,
@@ -39,6 +47,17 @@ pub struct FML {
     filter: String,
     current_tab: Tabs,
     ticks: u64,
+}
+
+impl ModItem {
+    pub fn new(mod_: api::Mod) -> ModItem {
+        ModItem {
+            mod_,
+            downloaded: false,
+            downloading: false,
+            download_perc: 0,
+        }
+    }
 }
 
 impl FML {
@@ -75,7 +94,10 @@ impl FML {
         let mods = api::get_mods(None).await.ok().unwrap();
         let mod_list_items = mods
             .into_iter()
-            .map(|mod_| ModListItem::new(mod_, false))
+            .map(|mod_| {
+                let mod_item = ModItem::new(mod_);
+                ModListItem::new(mod_item)
+            })
             .collect();
         mod_list_items
     }
@@ -122,7 +144,7 @@ impl FML {
                         KeyCode::Enter => {
                             let mod_ = self.stateful_mod_list.lock().unwrap().selected_mod();
                             if let Some(mod_) = mod_ {
-                                let factorio_mod = &mod_.lock().unwrap().factorio_mod.clone();
+                                let factorio_mod = &mod_.lock().unwrap().mod_item.mod_.clone();
                                 let token = self.server_settings.token.clone();
                                 let username = self.server_settings.username.clone();
                                 let mod_name = factorio_mod.name.clone();
@@ -134,7 +156,7 @@ impl FML {
                                         &token,
                                         &mod_dir,
                                         Some(|x| {
-                                            mod_.lock().unwrap().installed_percentage = x;
+                                            mod_.lock().unwrap().mod_item.download_perc = x;
                                         }),
                                     )
                                     .await
@@ -274,16 +296,16 @@ impl FML {
                 let selected_mod = selected_mod.clone();
                 let stateful_mod_list = self.stateful_mod_list.clone();
                 tokio::spawn(async move {
-                    let name = selected_mod.lock().unwrap().factorio_mod.name.clone();
+                    let name = selected_mod.lock().unwrap().mod_item.mod_.name.clone();
                     // Small debounce so we don't spam the api
                     tokio::time::sleep(Duration::from_millis(1000)).await;
                     let new_selected_mod = stateful_mod_list.lock().unwrap().selected_mod();
                     if let Some(new_selected_mod) = new_selected_mod {
-                        if new_selected_mod.lock().unwrap().factorio_mod.name == name {
+                        if new_selected_mod.lock().unwrap().mod_item.mod_.name == name {
                             // Load full mod information from api
                             match api::get_mod(&name).await {
                                 Ok(mod_) => {
-                                    selected_mod.lock().unwrap().factorio_mod = mod_;
+                                    selected_mod.lock().unwrap().mod_item.mod_ = mod_;
                                 }
                                 Err(err) => {
                                     selected_mod.lock().unwrap().loading = false;
@@ -310,8 +332,8 @@ impl FML {
                 )
                 .split(layout);
 
-            if selected_mod.lock().unwrap().factorio_mod.full == Some(true) {
-                let mod_ = selected_mod.lock().unwrap().factorio_mod.clone();
+            if selected_mod.lock().unwrap().mod_item.mod_.full == Some(true) {
+                let mod_ = selected_mod.lock().unwrap().mod_item.mod_.clone();
                 let mut text = vec![
                     Spans::from(format!("Name:      {}", mod_.title)),
                     Spans::from(format!("Downloads: {}", mod_.downloads_count)),
@@ -339,7 +361,7 @@ impl FML {
                         .title("Download Progress"),
                 )
                 .gauge_style(Style::default().fg(Color::Green))
-                .percent(selected_mod.lock().unwrap().installed_percentage);
+                .percent(selected_mod.lock().unwrap().mod_item.download_perc);
             frame.render_widget(progress, chunks[1]);
         }
     }
