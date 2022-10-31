@@ -247,7 +247,7 @@ impl<'a> StatefulWidget for ModList<'a> {
                     &blank_symbol
                 };
 
-                let symbol = if item.mod_item.downloaded {
+                let symbol = if item.mod_item.download_info.downloaded {
                     installed_symbol
                 } else {
                     symbol

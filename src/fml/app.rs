@@ -19,7 +19,7 @@ use crate::factorio::{api, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
-use super::markdown;
+use super::{markdown, util};
 use super::mods::StatefulModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
@@ -33,9 +33,15 @@ enum Tabs {
 #[derive(Debug, Clone)]
 pub struct ModItem {
     pub mod_: api::Mod,
+    pub download_info: DownloadInfo,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DownloadInfo {
     pub downloaded: bool,
     pub downloading: bool,
     pub download_perc: u16,
+    pub versions: Vec<String>,
 }
 
 pub struct FML {
@@ -53,9 +59,7 @@ impl ModItem {
     pub fn new(mod_: api::Mod) -> ModItem {
         ModItem {
             mod_,
-            downloaded: false,
-            downloading: false,
-            download_perc: 0,
+            download_info: DownloadInfo::default(),
         }
     }
 }
@@ -69,8 +73,9 @@ impl FML {
         let stateful_mod_list = Arc::new(Mutex::new(StatefulModList::default()));
         let stateful_mod_list_clone = stateful_mod_list.clone();
         // in a seperate thread we will update the mod list
+        let mods_dir_path = fml_config.mods_dir_path.clone();
         tokio::spawn(async move {
-            let mod_list = Self::generate_mod_list().await;
+            let mod_list = Self::generate_mod_list(&mods_dir_path).await;
             stateful_mod_list_clone.lock().unwrap().set_items(mod_list);
         });
         let events = Events::with_config(None);
@@ -90,12 +95,16 @@ impl FML {
         }
     }
 
-    async fn generate_mod_list() -> Vec<ModListItem> {
+    async fn generate_mod_list(mods_dir: &str) -> Vec<ModListItem> {
         let mods = api::get_mods(None).await.ok().unwrap();
+        let installed_mods = util::find_installed_mods(mods_dir).unwrap();
         let mod_list_items = mods
             .into_iter()
             .map(|mod_| {
-                let mod_item = ModItem::new(mod_);
+                let mut mod_item = ModItem::new(mod_);
+                if installed_mods.contains_key(&mod_item.mod_.name) {
+                    mod_item.download_info.downloaded = true;
+                }
                 ModListItem::new(mod_item)
             })
             .collect();
@@ -156,7 +165,7 @@ impl FML {
                                         &token,
                                         &mod_dir,
                                         Some(|x| {
-                                            mod_.lock().unwrap().mod_item.download_perc = x;
+                                            mod_.lock().unwrap().mod_item.download_info.download_perc = x;
                                         }),
                                     )
                                     .await
@@ -361,7 +370,7 @@ impl FML {
                         .title("Download Progress"),
                 )
                 .gauge_style(Style::default().fg(Color::Green))
-                .percent(selected_mod.lock().unwrap().mod_item.download_perc);
+                .percent(selected_mod.lock().unwrap().mod_item.download_info.download_perc);
             frame.render_widget(progress, chunks[1]);
         }
     }
