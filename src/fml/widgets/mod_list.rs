@@ -29,8 +29,8 @@ impl ListState {
 #[derive(Debug, Clone)]
 pub struct ModListItem {
     pub factorio_mod: Mod,
-    pub installed: bool,
     pub loading: bool,
+    pub installed_percentage: u16,
     style: Style,
 }
 
@@ -39,18 +39,13 @@ impl ModListItem {
         ModListItem {
             factorio_mod,
             style: Style::default(),
-            installed,
+            installed_percentage: 0,
             loading: false,
         }
     }
 
     pub fn style(mut self, style: Style) -> ModListItem {
         self.style = style;
-        self
-    }
-
-    pub fn installed(mut self, installed: bool) -> ModListItem {
-        self.installed = installed;
         self
     }
 
@@ -254,7 +249,7 @@ impl<'a> StatefulWidget for ModList<'a> {
                     &blank_symbol
                 };
 
-                let symbol = if item.installed {
+                let symbol = if item.installed_percentage == 100 {
                     installed_symbol
                 } else {
                     symbol

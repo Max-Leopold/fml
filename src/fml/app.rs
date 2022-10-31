@@ -12,7 +12,7 @@ use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Layout, Rect};
 use tui::style::{Color, Style};
 use tui::text::Spans;
-use tui::widgets::{Block, Borders, Paragraph, Wrap};
+use tui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
 use crate::factorio::{api, mod_list, server_settings};
@@ -34,6 +34,7 @@ pub struct FML {
     stateful_mod_list: Arc<Mutex<StatefulModList>>,
     mod_list: mod_list::ModList,
     server_settings: server_settings::ServerSettings,
+    fml_config: FmlConfig,
     events: Events,
     filter: String,
     current_tab: Tabs,
@@ -62,6 +63,7 @@ impl FML {
             stateful_mod_list,
             mod_list,
             server_settings,
+            fml_config,
             events,
             filter,
             current_tab,
@@ -118,13 +120,26 @@ impl FML {
                             self.stateful_mod_list.lock().unwrap().next();
                         }
                         KeyCode::Enter => {
-                            let enabled =
-                                self.stateful_mod_list.lock().unwrap().toggle_install(None);
                             let mod_ = self.stateful_mod_list.lock().unwrap().selected_mod();
                             if let Some(mod_) = mod_ {
-                                let factorio_mod = &mod_.lock().unwrap().factorio_mod;
-                                self.mod_list
-                                    .set_mod_enabled(&factorio_mod.name, enabled.unwrap());
+                                let factorio_mod = &mod_.lock().unwrap().factorio_mod.clone();
+                                let token = self.server_settings.token.clone();
+                                let username = self.server_settings.username.clone();
+                                let mod_name = factorio_mod.name.clone();
+                                let mod_dir = self.fml_config.mods_dir_path.clone();
+                                tokio::spawn(async move {
+                                    api::download_mod(
+                                        &mod_name,
+                                        &username,
+                                        &token,
+                                        &mod_dir,
+                                        Some(|x| {
+                                            mod_.lock().unwrap().installed_percentage = x;
+                                        }),
+                                    )
+                                    .await
+                                    .unwrap();
+                                });
                             }
                         }
                         KeyCode::Char(c) => {
@@ -284,6 +299,17 @@ impl FML {
                 });
             }
 
+            let chunks = Layout::default()
+                .direction(tui::layout::Direction::Vertical)
+                .constraints(
+                    [
+                        tui::layout::Constraint::Min(3),
+                        tui::layout::Constraint::Length(3),
+                    ]
+                    .as_ref(),
+                )
+                .split(layout);
+
             if selected_mod.lock().unwrap().factorio_mod.full == Some(true) {
                 let mod_ = selected_mod.lock().unwrap().factorio_mod.clone();
                 let mut text = vec![
@@ -297,14 +323,24 @@ impl FML {
                 let text = Paragraph::new(text)
                     .block(Block::default().borders(Borders::ALL).title("Mod Info"))
                     .wrap(Wrap { trim: true });
-                frame.render_widget(text, layout);
+                frame.render_widget(text, chunks[0]);
             } else {
                 let loading = Loading::new()
                     .block(Block::default().borders(Borders::ALL).title("Mod Info"))
                     .ticks(self.ticks)
                     .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
-                frame.render_widget(loading, layout);
+                frame.render_widget(loading, chunks[0]);
             }
+
+            let progress = Gauge::default()
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Download Progress"),
+                )
+                .gauge_style(Style::default().fg(Color::Green))
+                .percent(selected_mod.lock().unwrap().installed_percentage);
+            frame.render_widget(progress, chunks[1]);
         }
     }
 

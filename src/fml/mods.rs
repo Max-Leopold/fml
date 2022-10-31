@@ -64,25 +64,6 @@ impl StatefulModList {
         self.state.select(Some(i));
     }
 
-    pub fn toggle_install(&mut self, index: Option<usize>) -> Option<bool> {
-        if let None = self.filtered_items {
-            return None;
-        }
-
-        let index = match index {
-            Some(index) => index,
-            None => match self.state.selected() {
-                Some(index) => index,
-                None => return None,
-            },
-        };
-        // Toggle installed value for the selected mod
-        let mod_item = self.filtered_items.as_ref().unwrap().get(index).unwrap();
-        let mut mod_item = mod_item.lock().unwrap();
-        mod_item.installed = !mod_item.installed;
-        Some(mod_item.installed)
-    }
-
     pub fn selected_mod(&self) -> Option<Arc<Mutex<ModListItem>>> {
         if let None = self.filtered_items {
             return None;
