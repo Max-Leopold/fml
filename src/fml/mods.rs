@@ -89,13 +89,9 @@ impl StatefulModList {
                 .unwrap()
                 .iter()
                 .filter(|item| {
-                    item.lock()
-                        .unwrap()
-                        .mod_item
-                        .mod_
-                        .name
-                        .to_lowercase()
-                        .contains(&filter.to_lowercase())
+                    let mod_ = &item.lock().unwrap().mod_item.mod_;
+                    mod_.name.to_lowercase().contains(&filter.to_lowercase())
+                        || mod_.title.to_lowercase().contains(&filter.to_lowercase())
                 })
                 .map(|item| item.clone())
                 .collect(),
