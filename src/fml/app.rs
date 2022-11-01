@@ -19,15 +19,22 @@ use crate::factorio::{api, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
+use super::handler::handler::EventHandler;
 use super::mods::StatefulModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
 use super::{markdown, util};
 
 #[derive(Debug, Clone, Copy)]
-enum Tabs {
+pub enum Tabs {
     Manage,
     Install,
+}
+
+pub enum ActiveBlock {
+    InstallModList,
+    InstallSearch,
+    ManageModList,
 }
 
 #[derive(Debug, Clone)]
@@ -45,15 +52,17 @@ pub struct DownloadInfo {
 }
 
 pub struct FML {
-    stateful_mod_list: Arc<Mutex<StatefulModList>>,
-    mod_list: mod_list::ModList,
-    server_settings: server_settings::ServerSettings,
-    fml_config: FmlConfig,
+    pub stateful_mod_list: Arc<Mutex<StatefulModList>>,
+    pub mod_list: mod_list::ModList,
+    pub server_settings: server_settings::ServerSettings,
+    pub fml_config: FmlConfig,
     events: Events,
-    filter: String,
-    current_tab: Tabs,
-    show_quit_popup: bool,
-    ticks: u64,
+    pub filter: String,
+    pub current_tab: Tabs,
+    pub show_quit_popup: bool,
+    pub active_block: ActiveBlock,
+    pub ticks: u64,
+    should_quit: bool,
 }
 
 impl ModItem {
@@ -84,6 +93,8 @@ impl FML {
         let current_tab = Tabs::Manage;
         let ticks = 0;
         let show_quit_popup = false;
+        let active_block = ActiveBlock::ManageModList;
+        let should_quit = false;
 
         FML {
             stateful_mod_list,
@@ -94,7 +105,9 @@ impl FML {
             filter,
             current_tab,
             show_quit_popup,
+            active_block,
             ticks,
+            should_quit,
         }
     }
 
@@ -143,94 +156,21 @@ impl FML {
         terminal: &mut Terminal<B>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         loop {
+            if self.should_quit {
+                break;
+            }
+
             terminal.draw(|frame| self.draw(frame))?;
             if let Some(event) = self.next_event().await {
-                match event {
-                    Event::Input(input) => match input {
-                        KeyCode::Ctrl('c') => break,
-                        KeyCode::Char('q') => {
-                            if !self.show_quit_popup {
-                                self.show_quit_popup = true;
-                            }
-                        }
-                        KeyCode::Char('n') => {
-                            if self.show_quit_popup {
-                                break;
-                            }
-                        }
-                        KeyCode::Char('y') => {
-                            if self.show_quit_popup {
-                                self.mod_list.save()?;
-                                break;
-                            }
-                        }
-                        KeyCode::Char('c') => {
-                            if self.show_quit_popup {
-                                self.show_quit_popup = false;
-                            }
-                        }
-                        KeyCode::Up => {
-                            self.stateful_mod_list.lock().unwrap().previous();
-                        }
-                        KeyCode::Down => {
-                            self.stateful_mod_list.lock().unwrap().next();
-                        }
-                        KeyCode::Enter => {
-                            let mod_ = self.stateful_mod_list.lock().unwrap().selected_mod();
-                            if let Some(mod_) = mod_ {
-                                let factorio_mod = &mod_.lock().unwrap().mod_item.mod_.clone();
-                                let token = self.server_settings.token.clone();
-                                let username = self.server_settings.username.clone();
-                                let mod_name = factorio_mod.name.clone();
-                                let mod_dir = self.fml_config.mods_dir_path.clone();
-                                tokio::spawn(async move {
-                                    api::download_mod(
-                                        &mod_name,
-                                        &username,
-                                        &token,
-                                        &mod_dir,
-                                        Some(|x| {
-                                            mod_.lock()
-                                                .unwrap()
-                                                .mod_item
-                                                .download_info
-                                                .download_perc = x;
-                                        }),
-                                    )
-                                    .await
-                                    .unwrap();
-
-                                    mod_.lock().unwrap().mod_item.download_info.downloaded = true;
-                                });
-                            }
-                        }
-                        KeyCode::Char(c) => {
-                            self.stateful_mod_list.lock().unwrap().reset_selected();
-                            self.filter.push(c);
-                        }
-                        KeyCode::Backspace => {
-                            self.stateful_mod_list.lock().unwrap().reset_selected();
-                            self.filter.pop();
-                        }
-                        KeyCode::Tab => {
-                            self.stateful_mod_list.lock().unwrap().reset_selected();
-                            self.filter.clear();
-                            match self.current_tab {
-                                Tabs::Manage => self.current_tab = Tabs::Install,
-                                Tabs::Install => self.current_tab = Tabs::Manage,
-                            }
-                        }
-                        _ => {}
-                    },
-                    Event::Tick => {
-                        // If we ever need to do some recurring task every tick we can call it here
-                        self.ticks += 1;
-                    }
-                }
+                super::handler::handler::Handler::handle(event, self);
             }
         }
 
         Ok(())
+    }
+
+    pub fn quit(&mut self) {
+        self.should_quit = true;
     }
 
     fn draw(&mut self, frame: &mut Frame<impl Backend>) {

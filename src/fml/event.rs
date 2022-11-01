@@ -32,6 +32,7 @@ pub enum KeyCode {
     Down,
     Enter,
     Backspace,
+    Esc,
     Unknown,
 }
 
@@ -65,6 +66,7 @@ impl Events {
                             crossterm::event::KeyCode::Enter => KeyCode::Enter,
                             crossterm::event::KeyCode::Backspace => KeyCode::Backspace,
                             crossterm::event::KeyCode::Tab => KeyCode::Tab,
+                            crossterm::event::KeyCode::Esc => KeyCode::Esc,
                             crossterm::event::KeyCode::Char(c) => match key_event.modifiers {
                               KeyModifiers::CONTROL => KeyCode::Ctrl(c),
                               _ => KeyCode::Char(c)
