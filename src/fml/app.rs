@@ -107,6 +107,7 @@ impl FML {
                 let mut mod_item = ModItem::new(mod_);
                 if installed_mods.contains_key(&mod_item.mod_.name) {
                     mod_item.download_info.downloaded = true;
+                    mod_item.download_info.versions = installed_mods.get(&mod_item.mod_.name).unwrap().to_vec();
                 }
                 ModListItem::new(mod_item)
             })

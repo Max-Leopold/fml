@@ -58,12 +58,14 @@ impl FmlConfig {
             }
             self.mods_dir_path = match fs::canonicalize(mods_dir_path) {
                 Ok(path) => path.to_str().unwrap().to_string(),
-                Err(_) => return Err(Error::from(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!(
+                Err(_) => {
+                    return Err(Error::from(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!(
                         "Could not find mods folder. You can use both absolute and relative paths."
                     ),
-                ))),
+                    )))
+                }
             };
             println!("Using mods folder at: {}", self.mods_dir_path);
 

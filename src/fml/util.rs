@@ -1,10 +1,12 @@
 use std::cmp;
 use std::collections::HashMap;
 
-use tui::layout::{Layout, Rect, Direction, Constraint};
-use tui::text::{Text, Spans, Span};
+use tui::layout::{Constraint, Direction, Layout, Rect};
+use tui::text::{Span, Spans, Text};
 
-pub fn find_installed_mods(mods_dir: &str) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
+pub fn find_installed_mods(
+    mods_dir: &str,
+) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
     let mut installed_mods: HashMap<String, Vec<String>> = HashMap::new();
     for mod_file in std::fs::read_dir(mods_dir)? {
         let mod_file = mod_file?;
@@ -13,7 +15,11 @@ pub fn find_installed_mods(mods_dir: &str) -> Result<HashMap<String, Vec<String>
             continue;
         }
         mod_file_name = mod_file_name.replace(".zip", "");
-        let mod_name = mod_file_name.split("_").take(mod_file_name.split("_").count() - 1).collect::<Vec<&str>>().join("_");
+        let mod_name = mod_file_name
+            .split("_")
+            .take(mod_file_name.split("_").count() - 1)
+            .collect::<Vec<&str>>()
+            .join("_");
         let mod_version = mod_file_name.split("_").last().unwrap().to_string();
         if installed_mods.contains_key(&mod_name) {
             installed_mods.get_mut(&mod_name).unwrap().push(mod_version);

@@ -20,6 +20,7 @@ struct InternalModsConfig {
 struct ModEntry {
     pub name: String,
     pub enabled: bool,
+    pub version: Option<String>,
 }
 
 impl ModList {
@@ -49,6 +50,7 @@ impl ModList {
                 ModEntry {
                     name: "base".to_string(),
                     enabled: true,
+                    version: None,
                 },
             );
             let config = ModList {
@@ -77,6 +79,7 @@ impl ModList {
                 ModEntry {
                     name: name.to_string(),
                     enabled,
+                    version: None,
                 },
             );
         }
@@ -91,6 +94,7 @@ impl ModList {
                 .map(|mod_config| ModEntry {
                     name: mod_config.name.clone(),
                     enabled: mod_config.enabled,
+                    version: None,
                 })
                 .collect(),
         };

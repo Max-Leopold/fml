@@ -1,2 +1,2 @@
-pub mod mod_list;
 pub mod loading;
+pub mod mod_list;

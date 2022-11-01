@@ -11,10 +11,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     /// Creates a new parser with the given input text.
     pub fn new(input: &'a str) -> Self {
-        Parser {
-            first: true,
-            input,
-        }
+        Parser { first: true, input }
     }
 
     pub fn to_spans(&mut self) -> Vec<Spans<'a>> {
