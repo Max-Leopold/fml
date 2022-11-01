@@ -170,6 +170,8 @@ impl FML {
                                     )
                                     .await
                                     .unwrap();
+
+                                    mod_.lock().unwrap().mod_item.download_info.downloaded = true;
                                 });
                             }
                         }
