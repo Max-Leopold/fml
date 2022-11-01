@@ -57,7 +57,7 @@ pub struct FML {
     pub mod_list: mod_list::ModList,
     pub server_settings: server_settings::ServerSettings,
     pub fml_config: FmlConfig,
-    events: Events,
+    pub events: Events,
     pub filter: String,
     pub current_tab: Tabs,
     pub show_quit_popup: bool,

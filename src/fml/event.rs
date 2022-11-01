@@ -23,7 +23,7 @@ pub enum Event<I> {
     Tick,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum KeyCode {
     Char(char),
     Ctrl(char),
@@ -38,13 +38,14 @@ pub enum KeyCode {
 
 pub struct Events {
     rx: mpsc::UnboundedReceiver<Event<KeyCode>>,
+    pub tx: mpsc::UnboundedSender<Event<KeyCode>>,
 }
 
 impl Events {
     pub fn with_config(config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
         let (tx, rx) = mpsc::unbounded_channel();
-        let tx = tx.clone();
+        let tx_ = tx.clone();
         let mut event_stream = crossterm::event::EventStream::new();
 
         tokio::spawn(async move {
@@ -86,7 +87,7 @@ impl Events {
             }
         });
 
-        Self { rx }
+        Self { rx, tx: tx_ }
     }
 
     pub fn next(&mut self) -> impl futures_util::Future<Output = Option<Event<KeyCode>>> + '_ {

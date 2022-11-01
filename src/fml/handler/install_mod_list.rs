@@ -9,7 +9,14 @@ pub struct InstallModListHandler {}
 impl EventHandler for InstallModListHandler {
     fn handle(event: Event<KeyCode>, app: &mut FML) {
         match event {
-            Event::Input(input) => match input {
+            Event::Input(ref input) => match input {
+                KeyCode::Char('/') => {
+                    app.active_block = crate::fml::app::ActiveBlock::InstallSearch;
+                }
+                KeyCode::Backspace | KeyCode::Char(_) => {
+                    app.active_block = crate::fml::app::ActiveBlock::InstallSearch;
+                    app.events.tx.send(event).unwrap();
+                }
                 KeyCode::Up => {
                     app.stateful_mod_list.lock().unwrap().previous();
                 }
@@ -40,9 +47,6 @@ impl EventHandler for InstallModListHandler {
                             mod_.lock().unwrap().mod_item.download_info.downloaded = true;
                         });
                     }
-                }
-                KeyCode::Char('/') => {
-                    app.active_block = crate::fml::app::ActiveBlock::InstallSearch;
                 }
                 _ => {}
             },
