@@ -9,9 +9,9 @@ use crossterm::terminal::{
 };
 use log::info;
 use tui::backend::{Backend, CrosstermBackend};
-use tui::layout::{Layout, Rect};
+use tui::layout::{Alignment, Layout, Rect};
 use tui::style::{Color, Style};
-use tui::text::Spans;
+use tui::text::{Spans, Text};
 use tui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
@@ -19,10 +19,10 @@ use crate::factorio::{api, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
-use super::{markdown, util};
 use super::mods::StatefulModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
+use super::{markdown, util};
 
 #[derive(Debug, Clone, Copy)]
 enum Tabs {
@@ -52,6 +52,7 @@ pub struct FML {
     events: Events,
     filter: String,
     current_tab: Tabs,
+    show_quit_popup: bool,
     ticks: u64,
 }
 
@@ -82,6 +83,7 @@ impl FML {
         let filter = String::new();
         let current_tab = Tabs::Manage;
         let ticks = 0;
+        let show_quit_popup = false;
 
         FML {
             stateful_mod_list,
@@ -91,6 +93,7 @@ impl FML {
             events,
             filter,
             current_tab,
+            show_quit_popup,
             ticks,
         }
     }
@@ -144,6 +147,27 @@ impl FML {
                 match event {
                     Event::Input(input) => match input {
                         KeyCode::Ctrl('c') => break,
+                        KeyCode::Char('q') => {
+                            if !self.show_quit_popup {
+                                self.show_quit_popup = true;
+                            }
+                        }
+                        KeyCode::Char('n') => {
+                            if self.show_quit_popup {
+                                break;
+                            }
+                        }
+                        KeyCode::Char('y') => {
+                            if self.show_quit_popup {
+                                self.mod_list.save()?;
+                                break;
+                            }
+                        }
+                        KeyCode::Char('c') => {
+                            if self.show_quit_popup {
+                                self.show_quit_popup = false;
+                            }
+                        }
                         KeyCode::Up => {
                             self.stateful_mod_list.lock().unwrap().previous();
                         }
@@ -165,7 +189,11 @@ impl FML {
                                         &token,
                                         &mod_dir,
                                         Some(|x| {
-                                            mod_.lock().unwrap().mod_item.download_info.download_perc = x;
+                                            mod_.lock()
+                                                .unwrap()
+                                                .mod_item
+                                                .download_info
+                                                .download_perc = x;
                                         }),
                                     )
                                     .await
@@ -221,6 +249,26 @@ impl FML {
         match self.current_tab {
             Tabs::Manage => self.draw_manage_tab(frame, chunks[1]),
             Tabs::Install => self.draw_install_tab(frame, chunks[1]),
+        }
+
+        if self.show_quit_popup {
+            let block = Block::default()
+                .title("Save Changes?")
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::Yellow));
+            let area = util::centered_rect(30, 6, frame.size());
+            let text = util::centered_text(
+                Text::raw("Save changes to mod-list.json? (y/n/c)"),
+                block.inner(area).width.into(),
+                block.inner(area).height.into(),
+                Some(true),
+            );
+            let popup = Paragraph::new(text)
+                .block(block)
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            frame.render_widget(tui::widgets::Clear, area);
+            frame.render_widget(popup, area);
         }
     }
 
@@ -372,7 +420,14 @@ impl FML {
                         .title("Download Progress"),
                 )
                 .gauge_style(Style::default().fg(Color::Green))
-                .percent(selected_mod.lock().unwrap().mod_item.download_info.download_perc);
+                .percent(
+                    selected_mod
+                        .lock()
+                        .unwrap()
+                        .mod_item
+                        .download_info
+                        .download_perc,
+                );
             frame.render_widget(progress, chunks[1]);
         }
     }
