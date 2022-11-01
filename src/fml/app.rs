@@ -31,6 +31,7 @@ pub enum Tabs {
     Install,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveBlock {
     InstallModList,
     InstallSearch,
@@ -120,7 +121,8 @@ impl FML {
                 let mut mod_item = ModItem::new(mod_);
                 if installed_mods.contains_key(&mod_item.mod_.name) {
                     mod_item.download_info.downloaded = true;
-                    mod_item.download_info.versions = installed_mods.get(&mod_item.mod_.name).unwrap().to_vec();
+                    mod_item.download_info.versions =
+                        installed_mods.get(&mod_item.mod_.name).unwrap().to_vec();
                 }
                 ModListItem::new(mod_item)
             })
@@ -231,14 +233,22 @@ impl FML {
     }
 
     fn draw_manage_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
-        let block = Block::default().borders(Borders::ALL).title("Manage");
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("Manage")
+            .border_style(self.block_style(ActiveBlock::ManageModList));
         frame.render_widget(block, rect);
     }
 
     fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
         if !(self.stateful_mod_list.lock().unwrap().is_ready()) {
             let loading = Loading::new()
-                .block(Block::default().borders(Borders::ALL).title("Mods"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Mods")
+                        .border_style(self.block_style(ActiveBlock::InstallModList)),
+                )
                 .ticks(self.ticks)
                 .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
             frame.render_widget(loading, rect);
@@ -274,7 +284,12 @@ impl FML {
         let items = self.stateful_mod_list.lock().unwrap().items(&self.filter);
 
         let list = ModList::with_items(items)
-            .block(Block::default().borders(Borders::ALL).title("Mods"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Mods")
+                    .border_style(self.block_style(ActiveBlock::InstallModList)),
+            )
             .highlight_style(Style::default().fg(Color::Yellow))
             .highlight_symbol(">> ")
             .installed_symbol("✔  ");
@@ -374,8 +389,16 @@ impl FML {
     }
 
     fn draw_search_bar(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let search_bar = tui::widgets::Paragraph::new(self.filter.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Search"));
+        let mut search_string = self.filter.clone();
+        if self.active_block == ActiveBlock::InstallSearch {
+            search_string += "█";
+        }
+        let search_bar = tui::widgets::Paragraph::new(search_string).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Search")
+                .border_style(self.block_style(ActiveBlock::InstallSearch)),
+        );
 
         frame.render_widget(search_bar, layout);
     }
@@ -383,4 +406,20 @@ impl FML {
     async fn next_event(&mut self) -> Option<Event<KeyCode>> {
         self.events.next().await
     }
+
+    fn block_style(&self, block: ActiveBlock) -> Style {
+        if self.active_block == block {
+            default_active_block_style()
+        } else {
+            default_block_style()
+        }
+    }
+}
+
+fn default_active_block_style() -> Style {
+    Style::default().fg(Color::Yellow)
+}
+
+fn default_block_style() -> Style {
+    Style::reset()
 }
