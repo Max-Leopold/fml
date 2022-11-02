@@ -2,13 +2,13 @@ use super::widgets::mod_list::{ListState, ModListItem};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
-pub struct StatefulModList {
+pub struct InstallModList {
     pub state: ListState,
     items: Option<Vec<Arc<Mutex<ModListItem>>>>,
     filtered_items: Option<Vec<Arc<Mutex<ModListItem>>>>,
 }
 
-impl StatefulModList {
+impl InstallModList {
     pub fn set_items(&mut self, items: Vec<ModListItem>) {
         self.items = Some(
             items

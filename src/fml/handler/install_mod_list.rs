@@ -13,13 +13,13 @@ pub fn handle(event: Event<KeyCode>, app: &mut FML) {
                 app.events.tx.send(event).unwrap();
             }
             KeyCode::Up => {
-                app.stateful_mod_list.lock().unwrap().previous();
+                app.install_mod_list.lock().unwrap().previous();
             }
             KeyCode::Down => {
-                app.stateful_mod_list.lock().unwrap().next();
+                app.install_mod_list.lock().unwrap().next();
             }
             KeyCode::Enter => {
-                let mod_ = app.stateful_mod_list.lock().unwrap().selected_mod();
+                let mod_ = app.install_mod_list.lock().unwrap().selected_mod();
                 if let Some(mod_) = mod_ {
                     let factorio_mod = &mod_.lock().unwrap().mod_item.mod_.clone();
                     let token = app.server_settings.token.clone();

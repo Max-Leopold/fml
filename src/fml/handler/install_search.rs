@@ -5,11 +5,11 @@ pub fn handle(event: Event<KeyCode>, app: &mut FML) {
     match event {
         Event::Input(ref input) => match input {
             KeyCode::Char(c) => {
-                app.stateful_mod_list.lock().unwrap().reset_selected();
+                app.install_mod_list.lock().unwrap().reset_selected();
                 app.filter.push(*c);
             }
             KeyCode::Backspace => {
-                app.stateful_mod_list.lock().unwrap().reset_selected();
+                app.install_mod_list.lock().unwrap().reset_selected();
                 app.filter.pop();
             }
             KeyCode::Enter => {

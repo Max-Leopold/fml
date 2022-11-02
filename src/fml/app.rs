@@ -20,7 +20,7 @@ use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
 use super::handler::handler;
-use super::mods::StatefulModList;
+use super::install_mod_list::InstallModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
 use super::{markdown, util};
@@ -64,7 +64,7 @@ pub struct DownloadInfo {
 }
 
 pub struct FML {
-    pub stateful_mod_list: Arc<Mutex<StatefulModList>>,
+    pub install_mod_list: Arc<Mutex<InstallModList>>,
     pub mod_list: mod_list::ModList,
     pub server_settings: server_settings::ServerSettings,
     pub fml_config: FmlConfig,
@@ -90,13 +90,13 @@ impl FML {
         let server_settings =
             server_settings::get_server_settings(&fml_config.server_config_path).unwrap();
 
-        let stateful_mod_list = Arc::new(Mutex::new(StatefulModList::default()));
-        let stateful_mod_list_clone = stateful_mod_list.clone();
+        let install_mod_list = Arc::new(Mutex::new(InstallModList::default()));
+        let install_mod_list_clone = install_mod_list.clone();
         // in a seperate thread we will update the mod list
         let mods_dir_path = fml_config.mods_dir_path.clone();
         tokio::spawn(async move {
             let mod_list = Self::generate_mod_list(&mods_dir_path).await;
-            stateful_mod_list_clone.lock().unwrap().set_items(mod_list);
+            install_mod_list_clone.lock().unwrap().set_items(mod_list);
         });
         let events = Events::with_config(None);
         let filter = String::new();
@@ -105,7 +105,7 @@ impl FML {
         let navigation_history = vec![DEFAULT_ROUTE];
 
         FML {
-            stateful_mod_list,
+            install_mod_list,
             mod_list,
             server_settings,
             fml_config,
@@ -206,7 +206,7 @@ impl FML {
                 .style(Style::default().fg(Color::Yellow));
             let area = util::centered_rect(30, 6, frame.size());
             let text = util::centered_text(
-                Text::raw("Save changes to mod-list.json? (y/n/c)"),
+                Text::raw("Save changes to mod-list.json? (y/n)"),
                 block.inner(area).width.into(),
                 block.inner(area).height.into(),
                 Some(true),
@@ -246,7 +246,7 @@ impl FML {
     }
 
     fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
-        if !(self.stateful_mod_list.lock().unwrap().is_ready()) {
+        if !(self.install_mod_list.lock().unwrap().is_ready()) {
             let loading = Loading::new()
                 .block(
                     Block::default()
@@ -286,7 +286,7 @@ impl FML {
                 .as_ref(),
             )
             .split(layout);
-        let items = self.stateful_mod_list.lock().unwrap().items(&self.filter);
+        let items = self.install_mod_list.lock().unwrap().items(&self.filter);
 
         let list = ModList::with_items(items)
             .block(
@@ -302,24 +302,24 @@ impl FML {
         frame.render_stateful_widget(
             list,
             chunks[0],
-            &mut self.stateful_mod_list.lock().unwrap().state,
+            &mut self.install_mod_list.lock().unwrap().state,
         );
 
         self.draw_mod_details(frame, chunks[1]);
     }
 
     fn draw_mod_details(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let selected_mod = self.stateful_mod_list.lock().unwrap().selected_mod();
+        let selected_mod = self.install_mod_list.lock().unwrap().selected_mod();
         if let Some(selected_mod) = selected_mod {
             if !(selected_mod.lock().unwrap().loading) {
                 selected_mod.lock().unwrap().loading = true;
                 let selected_mod = selected_mod.clone();
-                let stateful_mod_list = self.stateful_mod_list.clone();
+                let install_mod_list = self.install_mod_list.clone();
                 tokio::spawn(async move {
                     let name = selected_mod.lock().unwrap().mod_item.mod_.name.clone();
                     // Small debounce so we don't spam the api
                     tokio::time::sleep(Duration::from_millis(1000)).await;
-                    let new_selected_mod = stateful_mod_list.lock().unwrap().selected_mod();
+                    let new_selected_mod = install_mod_list.lock().unwrap().selected_mod();
                     if let Some(new_selected_mod) = new_selected_mod {
                         if new_selected_mod.lock().unwrap().mod_item.mod_.name == name {
                             // Load full mod information from api

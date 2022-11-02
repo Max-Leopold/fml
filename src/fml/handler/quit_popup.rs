@@ -8,6 +8,7 @@ pub fn handle(event: Event<KeyCode>, app: &mut FML) {
                 app.undo_navigation();
             }
             KeyCode::Char('y') => {
+                app.mod_list.save().unwrap();
                 app.quit_gracefully();
             }
             KeyCode::Char('n') => {
