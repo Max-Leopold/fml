@@ -1,46 +1,37 @@
-use crate::fml::app::{ActiveBlock, Tabs, FML};
+use crate::fml::app::{ActiveBlock, Tab, FML};
 use crate::fml::event::{Event, KeyCode};
 
-use super::install_mod_list::InstallModListHandler;
-use super::install_search::InstallSearchHandler;
-use super::manage_mod_list::ManageModListHandler;
+use super::{install_mod_list, install_search, manage_mod_list, quit_popup};
 
-pub trait EventHandler {
-    fn handle(event: Event<KeyCode>, app: &mut FML);
-}
-
-pub struct Handler {}
-
-impl EventHandler for Handler {
-    fn handle(event: Event<KeyCode>, app: &mut FML) {
-        match event {
-            Event::Input(ref key) => match key {
-                KeyCode::Ctrl('c') => {
-                    app.quit();
+pub fn handle(event: Event<KeyCode>, app: &mut FML) {
+    match event {
+        Event::Input(ref key) => match key {
+            KeyCode::Ctrl('c') => {
+                app.navigate_block(ActiveBlock::QuitPopup);
+            }
+            KeyCode::Tab => match app.current_tab() {
+                Tab::Manage => {
+                    app.navigate_tab(Tab::Install);
                 }
-                KeyCode::Tab => match app.current_tab {
-                    Tabs::Manage => {
-                      app.current_tab = Tabs::Install;
-                      app.active_block = ActiveBlock::InstallModList;
-                    },
-                    Tabs::Install => {
-                      app.current_tab = Tabs::Manage;
-                      app.active_block = ActiveBlock::ManageModList;
-                    },
-                },
-                _ => match app.active_block {
-                    ActiveBlock::InstallModList => {
-                        InstallModListHandler::handle(event, app);
-                    }
-                    ActiveBlock::InstallSearch => {
-                        InstallSearchHandler::handle(event, app);
-                    }
-                    ActiveBlock::ManageModList => {
-                        ManageModListHandler::handle(event, app);
-                    }
-                },
+                Tab::Install => {
+                    app.navigate_tab(Tab::Manage);
+                }
             },
-            Event::Tick => app.ticks += 1,
-        }
+            _ => match app.active_block() {
+                ActiveBlock::InstallModList => {
+                    install_mod_list::handle(event, app)
+                }
+                ActiveBlock::InstallSearch => {
+                    install_search::handle(event, app)
+                }
+                ActiveBlock::ManageModList => {
+                    manage_mod_list::handle(event, app)
+                }
+                ActiveBlock::QuitPopup => {
+                    quit_popup::handle(event, app)
+                }
+            },
+        },
+        Event::Tick => app.ticks += 1,
     }
 }

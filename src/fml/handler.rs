@@ -1,4 +1,5 @@
 pub mod handler;
-pub mod install_mod_list;
-pub mod install_search;
-pub mod manage_mod_list;
+mod install_mod_list;
+mod install_search;
+mod manage_mod_list;
+mod quit_popup;

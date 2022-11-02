@@ -19,24 +19,35 @@ use crate::factorio::{api, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
-use super::handler::handler::EventHandler;
+use super::handler::handler;
 use super::mods::StatefulModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
 use super::{markdown, util};
 
 #[derive(Debug, Clone, Copy)]
-pub enum Tabs {
+pub enum Tab {
     Manage,
     Install,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActiveBlock {
     InstallModList,
     InstallSearch,
     ManageModList,
+    QuitPopup,
 }
+
+pub struct Route {
+    active_block: ActiveBlock,
+    tab: Tab,
+}
+
+const DEFAULT_ROUTE: Route = Route {
+    active_block: ActiveBlock::ManageModList,
+    tab: Tab::Manage,
+};
 
 #[derive(Debug, Clone)]
 pub struct ModItem {
@@ -59,9 +70,7 @@ pub struct FML {
     pub fml_config: FmlConfig,
     pub events: Events,
     pub filter: String,
-    pub current_tab: Tabs,
-    pub show_quit_popup: bool,
-    pub active_block: ActiveBlock,
+    navigation_history: Vec<Route>,
     pub ticks: u64,
     should_quit: bool,
 }
@@ -91,11 +100,9 @@ impl FML {
         });
         let events = Events::with_config(None);
         let filter = String::new();
-        let current_tab = Tabs::Manage;
         let ticks = 0;
-        let show_quit_popup = false;
-        let active_block = ActiveBlock::ManageModList;
         let should_quit = false;
+        let navigation_history = vec![DEFAULT_ROUTE];
 
         FML {
             stateful_mod_list,
@@ -104,9 +111,7 @@ impl FML {
             fml_config,
             events,
             filter,
-            current_tab,
-            show_quit_popup,
-            active_block,
+            navigation_history,
             ticks,
             should_quit,
         }
@@ -164,14 +169,14 @@ impl FML {
 
             terminal.draw(|frame| self.draw(frame))?;
             if let Some(event) = self.next_event().await {
-                super::handler::handler::Handler::handle(event, self);
+                handler::handle(event, self);
             }
         }
 
         Ok(())
     }
 
-    pub fn quit(&mut self) {
+    pub fn quit_gracefully(&mut self) {
         self.should_quit = true;
     }
 
@@ -189,12 +194,12 @@ impl FML {
             .split(rect);
 
         self.draw_tabs(frame, chunks[0]);
-        match self.current_tab {
-            Tabs::Manage => self.draw_manage_tab(frame, chunks[1]),
-            Tabs::Install => self.draw_install_tab(frame, chunks[1]),
+        match self.current_tab() {
+            Tab::Manage => self.draw_manage_tab(frame, chunks[1]),
+            Tab::Install => self.draw_install_tab(frame, chunks[1]),
         }
 
-        if self.show_quit_popup {
+        if self.active_block() == ActiveBlock::QuitPopup {
             let block = Block::default()
                 .title("Save Changes?")
                 .borders(Borders::ALL)
@@ -225,7 +230,7 @@ impl FML {
 
         let tabs = tui::widgets::Tabs::new(tabs)
             .block(Block::default().borders(Borders::ALL).title("Tabs"))
-            .select(self.current_tab as usize)
+            .select(self.current_tab() as usize)
             .style(Style::default().fg(Color::White))
             .highlight_style(Style::default().fg(Color::Yellow));
 
@@ -390,7 +395,7 @@ impl FML {
 
     fn draw_search_bar(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
         let mut search_string = self.filter.clone();
-        if self.active_block == ActiveBlock::InstallSearch {
+        if self.active_block() == ActiveBlock::InstallSearch {
             search_string += "█";
         }
         let search_bar = tui::widgets::Paragraph::new(search_string).block(
@@ -408,11 +413,48 @@ impl FML {
     }
 
     fn block_style(&self, block: ActiveBlock) -> Style {
-        if self.active_block == block {
+        if self.active_block() == block {
             default_active_block_style()
         } else {
             default_block_style()
         }
+    }
+
+    pub fn current_tab(&self) -> Tab {
+        self.navigation_history.last().unwrap_or(&DEFAULT_ROUTE).tab
+    }
+
+    pub fn active_block(&self) -> ActiveBlock {
+        self.navigation_history
+            .last()
+            .unwrap_or(&DEFAULT_ROUTE)
+            .active_block
+    }
+
+    fn navigate(&mut self, route: Route) {
+        self.navigation_history.push(route);
+    }
+
+    pub fn navigate_tab(&mut self, tab: Tab) {
+        let active_block = match tab {
+            Tab::Manage => ActiveBlock::ManageModList,
+            Tab::Install => ActiveBlock::InstallModList,
+        };
+        self.navigate(Route { tab, active_block });
+    }
+
+    pub fn navigate_block(&mut self, active_block: ActiveBlock) {
+        let tab = match active_block {
+            ActiveBlock::ManageModList => Tab::Manage,
+            ActiveBlock::InstallModList | ActiveBlock::InstallSearch => Tab::Install,
+            ActiveBlock::QuitPopup => self.current_tab(),
+        };
+
+        self.navigate(Route { tab, active_block });
+    }
+
+    pub fn undo_navigation(&mut self) {
+        self.navigation_history.pop();
     }
 }
 
