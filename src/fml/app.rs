@@ -21,6 +21,7 @@ use crate::fml_config::FmlConfig;
 use super::event::{Event, Events, KeyCode};
 use super::handler::handler;
 use super::install_mod_list::InstallModList;
+use super::manage_mod_list::ManageModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
 use super::{markdown, util};
@@ -65,6 +66,7 @@ pub struct DownloadInfo {
 
 pub struct FML {
     pub install_mod_list: Arc<Mutex<InstallModList>>,
+    pub manage_mod_list: Arc<Mutex<ManageModList>>,
     pub mod_list: mod_list::ModList,
     pub server_settings: server_settings::ServerSettings,
     pub fml_config: FmlConfig,
@@ -95,8 +97,17 @@ impl FML {
         // in a seperate thread we will update the mod list
         let mods_dir_path = fml_config.mods_dir_path.clone();
         tokio::spawn(async move {
-            let mod_list = Self::generate_mod_list(&mods_dir_path).await;
+            let mod_list = Self::generate_install_mod_list(&mods_dir_path).await;
             install_mod_list_clone.lock().unwrap().set_items(mod_list);
+        });
+
+        let manage_mod_list = Arc::new(Mutex::new(ManageModList::default()));
+        let manage_mod_list_clone = manage_mod_list.clone();
+        // in a seperate thread we will update the mod list
+        let mods_dir_path = fml_config.mods_dir_path.clone();
+        tokio::spawn(async move {
+            let mod_list = Self::generate_manage_mod_list(&mods_dir_path).await;
+            manage_mod_list_clone.lock().unwrap().set_items(mod_list);
         });
         let events = Events::with_config(None);
         let filter = String::new();
@@ -106,6 +117,7 @@ impl FML {
 
         FML {
             install_mod_list,
+            manage_mod_list,
             mod_list,
             server_settings,
             fml_config,
@@ -117,7 +129,7 @@ impl FML {
         }
     }
 
-    async fn generate_mod_list(mods_dir: &str) -> Vec<ModListItem> {
+    async fn generate_install_mod_list(mods_dir: &str) -> Vec<ModListItem> {
         let mods = api::get_mods(None).await.ok().unwrap();
         let installed_mods = util::find_installed_mods(mods_dir).unwrap();
         let mod_list_items = mods
@@ -129,6 +141,21 @@ impl FML {
                     mod_item.download_info.versions =
                         installed_mods.get(&mod_item.mod_.name).unwrap().to_vec();
                 }
+                ModListItem::new(mod_item)
+            })
+            .collect();
+        mod_list_items
+    }
+
+    async fn generate_manage_mod_list(mods_dir: &str) -> Vec<ModListItem> {
+        let installed_mods = util::find_installed_mods(mods_dir).unwrap();
+        let mod_list_items = installed_mods
+            .into_iter()
+            .map(|(name, versions)| {
+                let mut mod_ = api::Mod::default();
+                mod_.title = name.clone();
+                mod_.name = name.clone();
+                let mod_item = ModItem::new(mod_);
                 ModListItem::new(mod_item)
             })
             .collect();
@@ -238,11 +265,28 @@ impl FML {
     }
 
     fn draw_manage_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title("Manage")
-            .border_style(self.block_style(ActiveBlock::ManageModList));
-        frame.render_widget(block, rect);
+        self.draw_manage_list(frame, rect);
+    }
+
+    fn draw_manage_list(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
+        let items = self.manage_mod_list.lock().unwrap().items();
+
+        let list = ModList::with_items(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Mods")
+                    .border_style(self.block_style(ActiveBlock::ManageModList)),
+            )
+            .highlight_style(Style::default().fg(Color::Yellow))
+            .highlight_symbol(">> ")
+            .installed_symbol("✔  ");
+
+        frame.render_stateful_widget(
+            list,
+            rect,
+            &mut self.manage_mod_list.lock().unwrap().state,
+        );
     }
 
     fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
@@ -272,10 +316,10 @@ impl FML {
             .split(rect);
 
         self.draw_search_bar(frame, chunks[0]);
-        self.draw_list(frame, chunks[1]);
+        self.draw_install_list(frame, chunks[1]);
     }
 
-    fn draw_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
+    fn draw_install_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
         let chunks = Layout::default()
             .direction(tui::layout::Direction::Horizontal)
             .constraints(
