@@ -24,7 +24,7 @@ use super::install_mod_list::InstallModList;
 use super::manage_mod_list::ManageModList;
 use super::widgets::loading::Loading;
 use super::widgets::mod_list::{ModList, ModListItem};
-use super::{markdown, util};
+use super::{installed_mods, markdown, util};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Tab {
@@ -131,15 +131,22 @@ impl FML {
 
     async fn generate_install_mod_list(mods_dir: &str) -> Vec<ModListItem> {
         let mods = api::get_mods(None).await.ok().unwrap();
-        let installed_mods = util::find_installed_mods(mods_dir).unwrap();
+        let installed_mods = installed_mods::read_installed_mods(mods_dir).unwrap();
+        let installed_mods = installed_mods
+            .into_iter()
+            .map(|mod_| (mod_.name.clone(), mod_))
+            .collect::<std::collections::HashMap<String, installed_mods::InstalledMod>>();
         let mod_list_items = mods
             .into_iter()
             .map(|mod_| {
                 let mut mod_item = ModItem::new(mod_);
                 if installed_mods.contains_key(&mod_item.mod_.name) {
                     mod_item.download_info.downloaded = true;
-                    mod_item.download_info.versions =
-                        installed_mods.get(&mod_item.mod_.name).unwrap().to_vec();
+                    mod_item.download_info.versions = installed_mods
+                        .get(&mod_item.mod_.name)
+                        .unwrap()
+                        .version
+                        .clone();
                 }
                 ModListItem::new(mod_item)
             })
@@ -148,18 +155,16 @@ impl FML {
     }
 
     async fn generate_manage_mod_list(mods_dir: &str) -> Vec<ModListItem> {
-        let installed_mods = util::find_installed_mods(mods_dir).unwrap();
-        let mod_list_items = installed_mods
-            .into_iter()
-            .map(|(name, versions)| {
-                let mut mod_ = api::Mod::default();
-                mod_.title = name.clone();
-                mod_.name = name.clone();
-                let mod_item = ModItem::new(mod_);
-                ModListItem::new(mod_item)
-            })
-            .collect();
-        mod_list_items
+        // let installed_mods = util::read_installed_mods(mods_dir).unwrap();
+        // let mod_list_items = installed_mods
+        //     .into_iter()
+        //     .map(|mod_| {
+        //         let mod_item = ModItem::new(mod_);
+        //         ModListItem::new(mod_item)
+        //     })
+        //     .collect();
+        // mod_list_items
+        vec![]
     }
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -282,11 +287,7 @@ impl FML {
             .highlight_symbol(">> ")
             .installed_symbol("✔  ");
 
-        frame.render_stateful_widget(
-            list,
-            rect,
-            &mut self.manage_mod_list.lock().unwrap().state,
-        );
+        frame.render_stateful_widget(list, rect, &mut self.manage_mod_list.lock().unwrap().state);
     }
 
     fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {

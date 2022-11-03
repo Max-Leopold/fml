@@ -58,6 +58,10 @@ impl ManageModList {
     }
 
     pub fn items(&self) -> Vec<ModListItem> {
+        if let None = self.items {
+            return vec![];
+        }
+
         self.items
             .as_ref()
             .unwrap()
