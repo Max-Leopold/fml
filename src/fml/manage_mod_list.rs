@@ -13,36 +13,48 @@ pub struct ManageModItem {
 #[derive(Debug, Default)]
 pub struct ManageModList {
     pub state: ListState,
-    items: Option<Vec<Arc<Mutex<ManageModItem>>>>,
-    filtered_items: Option<Vec<Arc<Mutex<ManageModItem>>>>,
+    items: Vec<Arc<Mutex<ManageModItem>>>,
+    filter: String,
 }
 
 impl ManageModList {
     pub fn set_items(&mut self, items: Vec<InstalledMod>, mod_list: ModList) {
-        self.items = Some(
-            items
-                .into_iter()
-                .map(|item| {
-                    let item_name = item.name.clone();
-                    Arc::new(Mutex::new(ManageModItem {
-                        mod_: item,
-                        enabled: mod_list.mods.contains_key(&item_name)
-                            && mod_list.mods.get(&item_name).unwrap().enabled,
-                    }))
-                })
-                .collect(),
-        );
-        self.filtered_items = self.items.clone();
+        self.items = items
+            .into_iter()
+            .map(|item| {
+                let item_name = item.name.clone();
+                Arc::new(Mutex::new(ManageModItem {
+                    mod_: item,
+                    enabled: mod_list.mods.contains_key(&item_name)
+                        && mod_list.mods.get(&item_name).unwrap().enabled,
+                }))
+            })
+            .collect()
+    }
+
+    pub fn set_filter(&mut self, filter: String) {
+        self.filter = filter;
+    }
+
+    fn filtered_items(&self) -> Vec<Arc<Mutex<ManageModItem>>> {
+        self.items
+            .iter()
+            .filter(|mod_item| {
+                let mod_ = &mod_item.lock().unwrap().mod_;
+                mod_.name.contains(&self.filter) || mod_.title.contains(&self.filter)
+            })
+            .map(|mod_| mod_.clone())
+            .collect()
     }
 
     pub fn next(&mut self) {
-        if let None = self.filtered_items {
+        if self.filtered_items().is_empty() {
             return;
         }
 
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.filtered_items.as_ref().unwrap().len() - 1 {
+                if i >= self.filtered_items().len() - 1 {
                     0
                 } else {
                     i + 1
@@ -55,14 +67,14 @@ impl ManageModList {
     }
 
     pub fn previous(&mut self) {
-        if let None = self.filtered_items {
+        if self.filtered_items().is_empty() {
             return;
         }
 
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.filtered_items.as_ref().unwrap().len() - 1
+                    self.filtered_items().len() - 1
                 } else {
                     i - 1
                 }
@@ -73,13 +85,14 @@ impl ManageModList {
     }
 
     pub fn selected_mod(&self) -> Option<Arc<Mutex<ManageModItem>>> {
-        if let None = self.filtered_items {
+        if self.filtered_items().is_empty() {
             return None;
         }
 
         match self.state.selected() {
             Some(index) => {
-                let mod_item = self.filtered_items.as_ref().unwrap().get(index).unwrap();
+                let filtered_items = self.filtered_items();
+                let mod_item = filtered_items.get(index).unwrap();
                 Some(mod_item.clone())
             }
             None => None,
@@ -87,60 +100,24 @@ impl ManageModList {
     }
 
     pub fn add_mod(&mut self, mod_: InstalledMod, enabled: bool) {
-        if let None = self.items {
-            self.items = Some(Vec::new());
-        }
-
-        if let None = self.filtered_items {
-            self.filtered_items = Some(Vec::new());
-        }
-
         let mod_item = Arc::new(Mutex::new(ManageModItem { mod_, enabled }));
 
-        self.items.as_mut().unwrap().push(mod_item.clone());
-        self.filtered_items.as_mut().unwrap().push(mod_item.clone());
+        self.items.push(mod_item.clone());
     }
 
     pub fn remove_mod(&mut self, mod_name: &str) {
-        if let None = self.items {
-            return;
-        }
-
-        if let None = self.filtered_items {
-            return;
-        }
-
         let index = self
             .items
-            .as_ref()
-            .unwrap()
             .iter()
             .position(|mod_item| mod_item.lock().unwrap().mod_.name == mod_name);
 
         if let Some(index) = index {
-            self.items.as_mut().unwrap().remove(index);
-        }
-
-        let index = self
-            .filtered_items
-            .as_ref()
-            .unwrap()
-            .iter()
-            .position(|mod_item| mod_item.lock().unwrap().mod_.name == mod_name);
-
-        if let Some(index) = index {
-          self.filtered_items.as_mut().unwrap().remove(index);
+            self.items.remove(index);
         }
     }
 
     pub fn items(&self) -> Vec<EnabledListItem> {
-        if let None = self.items {
-            return vec![];
-        }
-
         self.items
-            .as_ref()
-            .unwrap()
             .iter()
             .map(|item| {
                 let item = item.lock().unwrap();
@@ -152,11 +129,7 @@ impl ManageModList {
     pub fn generate_mod_list(&self) -> ModList {
         let mut mod_list = ModList::new();
 
-        if let None = self.items {
-            return mod_list;
-        }
-
-        for item in self.items.as_ref().unwrap() {
+        for item in &self.items {
             let item = item.lock().unwrap();
             mod_list.mods.insert(
                 item.mod_.name.clone(),
