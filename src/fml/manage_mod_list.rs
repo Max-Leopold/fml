@@ -1,22 +1,34 @@
 use std::sync::{Arc, Mutex};
 
-use super::install_mod_list::InstallModList;
-use super::installed_mods::InstalledMod;
 use super::widgets::enabled_list::{EnabledListItem, ListState};
+use crate::factorio::installed_mods::InstalledMod;
+use crate::factorio::mod_list::{ModEntry, ModList};
+
+#[derive(Debug, Default)]
+pub struct ManageModItem {
+    pub mod_: InstalledMod,
+    pub enabled: bool,
+}
 
 #[derive(Debug, Default)]
 pub struct ManageModList {
     pub state: ListState,
-    items: Option<Vec<Arc<Mutex<InstalledMod>>>>,
-    filtered_items: Option<Vec<Arc<Mutex<InstalledMod>>>>,
+    items: Option<Vec<Arc<Mutex<ManageModItem>>>>,
+    filtered_items: Option<Vec<Arc<Mutex<ManageModItem>>>>,
 }
 
 impl ManageModList {
-    pub fn set_items(&mut self, items: Vec<InstalledMod>) {
+    pub fn set_items(&mut self, items: Vec<InstalledMod>, mod_list: ModList) {
         self.items = Some(
             items
                 .into_iter()
-                .map(|item| Arc::new(Mutex::new(item)))
+                .map(|item| {
+                    let item_name = item.name.clone();
+                    Arc::new(Mutex::new(ManageModItem {
+                        mod_: item,
+                        enabled: mod_list.mods.contains_key(&item_name),
+                    }))
+                })
                 .collect(),
         );
         self.filtered_items = self.items.clone();
@@ -70,8 +82,30 @@ impl ManageModList {
             .iter()
             .map(|item| {
                 let item = item.lock().unwrap();
-                EnabledListItem::new(item.title.clone())
+                EnabledListItem::new(item.mod_.title.clone()).enabled(item.enabled)
             })
             .collect()
+    }
+
+    pub fn generate_mod_list(&self) -> ModList {
+        let mut mod_list = ModList::new();
+
+        if let None = self.items {
+            return mod_list;
+        }
+
+        for item in self.items.as_ref().unwrap() {
+            let item = item.lock().unwrap();
+            mod_list.mods.insert(
+                item.mod_.name.clone(),
+                ModEntry {
+                    name: item.mod_.name.clone(),
+                    enabled: item.enabled,
+                    version: None,
+                },
+            );
+        }
+
+        mod_list
     }
 }

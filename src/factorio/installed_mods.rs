@@ -15,7 +15,7 @@ pub struct InstalledMod {
     #[serde(rename = "factorio_version")]
     pub factorio_version: String,
     pub title: String,
-    pub dependencies: Vec<String>,
+    pub dependencies: Option<Vec<String>>,
     pub description: String,
 }
 

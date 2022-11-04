@@ -1,4 +1,4 @@
-use crate::factorio::api::{self, Mod};
+use crate::factorio::api;
 
 use super::widgets::enabled_list::{EnabledListItem, ListState};
 use std::sync::{Arc, Mutex};
@@ -21,8 +21,8 @@ pub struct DownloadInfo {
 #[derive(Debug, Default)]
 pub struct InstallModList {
     pub state: ListState,
-    pub items: Option<Vec<Arc<Mutex<ModItem>>>>,
-    pub filtered_items: Option<Vec<Arc<Mutex<ModItem>>>>,
+    items: Option<Vec<Arc<Mutex<ModItem>>>>,
+    filtered_items: Option<Vec<Arc<Mutex<ModItem>>>>,
 }
 
 impl ModItem {

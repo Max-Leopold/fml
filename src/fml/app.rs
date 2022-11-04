@@ -15,17 +15,17 @@ use tui::text::{Spans, Text};
 use tui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
-use crate::factorio::{api, mod_list, server_settings};
+use crate::factorio::installed_mods::InstalledMod;
+use crate::factorio::{api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
 use super::handler::handler;
 use super::install_mod_list::{InstallModList, ModItem};
-use super::installed_mods::InstalledMod;
 use super::manage_mod_list::ManageModList;
-use super::widgets::enabled_list::{EnabledList, EnabledListItem};
+use super::widgets::enabled_list::EnabledList;
 use super::widgets::loading::Loading;
-use super::{installed_mods, markdown, util};
+use super::{markdown, util};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Tab {
@@ -54,7 +54,6 @@ const DEFAULT_ROUTE: Route = Route {
 pub struct FML {
     pub install_mod_list: Arc<Mutex<InstallModList>>,
     pub manage_mod_list: Arc<Mutex<ManageModList>>,
-    pub mod_list: mod_list::ModList,
     pub server_settings: server_settings::ServerSettings,
     pub fml_config: FmlConfig,
     pub events: Events,
@@ -66,7 +65,6 @@ pub struct FML {
 
 impl FML {
     pub async fn new(fml_config: FmlConfig) -> FML {
-        let mod_list = mod_list::ModList::load_or_create(&fml_config.mods_dir_path).unwrap();
         let server_settings =
             server_settings::get_server_settings(&fml_config.server_config_path).unwrap();
 
@@ -84,8 +82,12 @@ impl FML {
         // in a seperate thread we will update the mod list
         let mods_dir_path = fml_config.mods_dir_path.clone();
         tokio::spawn(async move {
-            let mod_list = Self::generate_manage_mod_list(&mods_dir_path).await;
-            manage_mod_list_clone.lock().unwrap().set_items(mod_list);
+            let mod_list_items = Self::generate_manage_mod_list(&mods_dir_path);
+            let mod_list = mod_list::ModList::load_or_create(&mods_dir_path).unwrap();
+            manage_mod_list_clone
+                .lock()
+                .unwrap()
+                .set_items(mod_list_items, mod_list);
         });
         let events = Events::with_config(None);
         let filter = String::new();
@@ -96,7 +98,6 @@ impl FML {
         FML {
             install_mod_list,
             manage_mod_list,
-            mod_list,
             server_settings,
             fml_config,
             events,
@@ -132,7 +133,7 @@ impl FML {
         mod_list_items
     }
 
-    async fn generate_manage_mod_list(mods_dir: &str) -> Vec<InstalledMod> {
+    fn generate_manage_mod_list(mods_dir: &str) -> Vec<InstalledMod> {
         installed_mods::read_installed_mods(mods_dir).unwrap()
     }
 
@@ -462,6 +463,10 @@ impl FML {
 
     pub fn undo_navigation(&mut self) {
         self.navigation_history.pop();
+    }
+
+    pub fn save(&mut self) {
+        todo!("Save installed mods to mod-list.json")
     }
 }
 
