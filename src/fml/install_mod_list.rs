@@ -4,7 +4,7 @@ use super::widgets::enabled_list::{EnabledListItem, ListState};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
-pub struct ModItem {
+pub struct InstallModItem {
     pub mod_: api::Mod,
     pub loading: bool,
     pub download_info: DownloadInfo,
@@ -22,12 +22,12 @@ pub struct DownloadInfo {
 pub struct InstallModList {
     pub state: ListState,
     pub filter: String,
-    items: Vec<Arc<Mutex<ModItem>>>,
+    items: Vec<Arc<Mutex<InstallModItem>>>,
 }
 
-impl ModItem {
-    pub fn new(mod_: api::Mod) -> ModItem {
-        ModItem {
+impl InstallModItem {
+    pub fn new(mod_: api::Mod) -> InstallModItem {
+        InstallModItem {
             mod_,
             loading: false,
             download_info: DownloadInfo::default(),
@@ -36,7 +36,7 @@ impl ModItem {
 }
 
 impl InstallModList {
-    pub fn set_items(&mut self, items: Vec<ModItem>) {
+    pub fn set_items(&mut self, items: Vec<InstallModItem>) {
         self.items = items
             .into_iter()
             .map(|item| Arc::new(Mutex::new(item)))
@@ -51,7 +51,7 @@ impl InstallModList {
         self.state.select(None);
     }
 
-    fn filtered_items(&self) -> Vec<Arc<Mutex<ModItem>>> {
+    fn filtered_items(&self) -> Vec<Arc<Mutex<InstallModItem>>> {
         self.items
             .iter()
             .filter(|mod_item| {
@@ -99,7 +99,7 @@ impl InstallModList {
         self.state.select(Some(i));
     }
 
-    pub fn selected_mod(&self) -> Option<Arc<Mutex<ModItem>>> {
+    pub fn selected_mod(&self) -> Option<Arc<Mutex<InstallModItem>>> {
         if self.filtered_items().is_empty() {
             return None;
         }
@@ -111,6 +111,17 @@ impl InstallModList {
                 Some(mod_item.clone())
             }
             None => None,
+        }
+    }
+
+    pub fn disable_mod(&mut self, mod_name: &str) {
+        let mod_ = self
+            .items
+            .iter()
+            .find(|mod_item| mod_item.lock().unwrap().mod_.name == mod_name);
+
+        if let Some(mod_) = mod_ {
+            mod_.lock().unwrap().download_info.downloaded = false;
         }
     }
 

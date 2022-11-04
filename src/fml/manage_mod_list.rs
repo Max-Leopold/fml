@@ -13,8 +13,8 @@ pub struct ManageModItem {
 #[derive(Debug, Default)]
 pub struct ManageModList {
     pub state: ListState,
+    pub filter: String,
     items: Vec<Arc<Mutex<ManageModItem>>>,
-    filter: String,
 }
 
 impl ManageModList {
@@ -30,10 +30,6 @@ impl ManageModList {
                 }))
             })
             .collect()
-    }
-
-    pub fn set_filter(&mut self, filter: String) {
-        self.filter = filter;
     }
 
     fn filtered_items(&self) -> Vec<Arc<Mutex<ManageModItem>>> {
@@ -102,7 +98,12 @@ impl ManageModList {
     pub fn add_mod(&mut self, mod_: InstalledMod, enabled: bool) {
         let mod_item = Arc::new(Mutex::new(ManageModItem { mod_, enabled }));
 
-        self.items.push(mod_item.clone());
+        self.items.push(mod_item);
+        self.items.sort_by(|a, b| {
+            let a = &a.lock().unwrap().mod_.title;
+            let b = &b.lock().unwrap().mod_.title;
+            a.cmp(b)
+        });
     }
 
     pub fn remove_mod(&mut self, mod_name: &str) {

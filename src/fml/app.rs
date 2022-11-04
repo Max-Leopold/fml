@@ -21,7 +21,7 @@ use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
 use super::handler::handler;
-use super::install_mod_list::{InstallModList, ModItem};
+use super::install_mod_list::{InstallModItem, InstallModList};
 use super::manage_mod_list::ManageModList;
 use super::widgets::enabled_list::EnabledList;
 use super::widgets::loading::Loading;
@@ -105,7 +105,7 @@ impl FML {
         }
     }
 
-    async fn generate_install_mod_list(mods_dir: &str) -> Vec<ModItem> {
+    async fn generate_install_mod_list(mods_dir: &str) -> Vec<InstallModItem> {
         let mods = api::get_mods(None).await.ok().unwrap();
         let installed_mods = installed_mods::read_installed_mods(mods_dir).unwrap();
         let installed_mods = installed_mods
@@ -115,7 +115,7 @@ impl FML {
         let mod_list_items = mods
             .into_iter()
             .map(|mod_| {
-                let mut mod_item = ModItem::new(mod_);
+                let mut mod_item = InstallModItem::new(mod_);
                 if installed_mods.contains_key(&mod_item.mod_.name) {
                     mod_item.download_info.downloaded = true;
                     mod_item.download_info.versions = installed_mods
@@ -298,11 +298,7 @@ impl FML {
                 .as_ref(),
             )
             .split(layout);
-        let items = self
-            .install_mod_list
-            .lock()
-            .unwrap()
-            .items();
+        let items = self.install_mod_list.lock().unwrap().items();
 
         let list = EnabledList::with_items(items)
             .block(
@@ -476,10 +472,39 @@ impl FML {
         // todo!("Save installed mods to mod-list.json")
     }
 
-    pub fn delete_mod(&mut self, mod_name: &str) {
+    pub fn delete_mod(&self, mod_name: &str) {
         installed_mods::delete_mod(mod_name, &self.fml_config.mods_dir_path).unwrap();
 
         self.manage_mod_list.lock().unwrap().remove_mod(mod_name);
+        self.install_mod_list.lock().unwrap().disable_mod(mod_name);
+    }
+
+    pub fn install_mod(&self, mod_: Arc<Mutex<InstallModItem>>) {
+        let factorio_mod = &mod_.lock().unwrap().mod_.clone();
+        let token = self.server_settings.token.clone();
+        let username = self.server_settings.username.clone();
+        let mod_name = factorio_mod.name.clone();
+        let mod_dir = self.fml_config.mods_dir_path.clone();
+        let manage_mod_list = self.manage_mod_list.clone();
+        tokio::spawn(async move {
+            let mut file = api::download_mod(
+                &mod_name,
+                &username,
+                &token,
+                &mod_dir,
+                Some(|x| {
+                    mod_.lock().unwrap().download_info.download_perc = x;
+                }),
+            )
+            .await
+            .unwrap();
+
+            mod_.lock().unwrap().download_info.downloaded = true;
+
+            if let Some(installed_mod) = installed_mods::parse_installed_mod(&mut file) {
+                manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
+            }
+        });
     }
 }
 

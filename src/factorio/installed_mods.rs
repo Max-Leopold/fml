@@ -1,4 +1,11 @@
+use std::fs::File;
+use std::io::BufReader;
 use std::io::Cursor;
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::path::Path;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -31,22 +38,14 @@ pub fn read_installed_mods(
             continue;
         }
 
-        // Because we have to clone the zip archive and fs::File doesn't implement Clone, we have to
-        // read the entire file into memory and then create a Cusror from it to satisfy the Read + Seek trait
-        // requirements of zip::ZipArchive::new
-        let mod_file_zip = std::fs::read(mod_file.path())?;
-        let cursor = Cursor::new(mod_file_zip);
-        let mut zip_archive = zip::ZipArchive::new(cursor)?;
-        let zip_archive_clone = zip_archive.clone();
-        let info = zip_archive_clone
-            .file_names()
-            .find(|file_name| file_name.ends_with("info.json"));
-        if info.is_none() {
+        let mut mod_file = std::fs::File::open(mod_file.path())?;
+        let installed_mod = parse_installed_mod(&mut mod_file);
+
+        if let None = installed_mod {
             continue;
         }
 
-        let info = zip_archive.by_name(info.unwrap()).unwrap();
-        let installed_mod: InstalledMod = serde_json::from_reader(info).unwrap();
+        let installed_mod = installed_mod.unwrap();
         let duplicate = installed_mods
             .iter_mut()
             .find(|m| installed_mod.name == m.name);
@@ -62,6 +61,28 @@ pub fn read_installed_mods(
     }
     installed_mods.sort_by(|a, b| a.title.cmp(&b.title));
     Ok(installed_mods)
+}
+
+pub fn parse_installed_mod(file: &mut File) -> Option<InstalledMod> {
+    // Because we have to clone the zip archive and fs::File doesn't implement Clone, we have to
+    // read the entire file into memory and then create a Cusror from it to satisfy the Read + Seek trait
+    // requirements of zip::ZipArchive::new
+    file.seek(SeekFrom::Start(0)).unwrap();
+    let mut reader = BufReader::new(file);
+    let mut buffer = Vec::new();
+    reader.read_to_end(&mut buffer).unwrap();
+    let cursor = Cursor::new(buffer);
+    let mut zip_archive = zip::ZipArchive::new(cursor).unwrap();
+    let zip_archive_clone = zip_archive.clone();
+    let info = zip_archive_clone
+        .file_names()
+        .find(|file_name| file_name.ends_with("info.json"));
+    if info.is_none() {
+        return None;
+    }
+
+    let info = zip_archive.by_name(info.unwrap()).unwrap();
+    Some(serde_json::from_reader(info).unwrap())
 }
 
 pub fn delete_mod(mod_name: &str, mods_dir: &str) -> Result<(), Box<dyn std::error::Error>> {

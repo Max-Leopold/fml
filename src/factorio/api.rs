@@ -72,7 +72,7 @@ pub async fn download_mod<F: Fn(u16)>(
     token: &str,
     dir: &str,
     f: Option<F>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<File, Box<dyn Error>> {
     let mod_ = get_mod(name).await?;
     let url = format!(
         "https://mods.factorio.com{}?username={}&token={}",
@@ -84,11 +84,15 @@ pub async fn download_mod<F: Fn(u16)>(
     let mut response = client.get(url).send().await?;
     let total_size = response.content_length().unwrap();
     let mut downloaded: usize = 0;
-    let mut file = File::create(format!(
-        "{}/{}",
-        dir,
-        mod_.latest_release.as_ref().unwrap().file_name
-    ))?;
+    let mut file = File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(format!(
+            "{}/{}",
+            dir,
+            mod_.latest_release.as_ref().unwrap().file_name
+        ))?;
 
     while let Some(chunk) = response.chunk().await? {
         file.write_all(&chunk)?;
@@ -99,5 +103,5 @@ pub async fn download_mod<F: Fn(u16)>(
         }
     }
 
-    Ok(())
+    Ok(file)
 }
