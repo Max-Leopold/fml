@@ -21,7 +21,7 @@ pub fn handle(event: Event<KeyCode>, app: &mut FML) {
             KeyCode::Enter => {
                 let mod_ = app.install_mod_list.lock().unwrap().selected_mod();
                 if let Some(mod_) = mod_ {
-                    let factorio_mod = &mod_.lock().unwrap().mod_item.mod_.clone();
+                    let factorio_mod = &mod_.lock().unwrap().mod_.clone();
                     let token = app.server_settings.token.clone();
                     let username = app.server_settings.username.clone();
                     let mod_name = factorio_mod.name.clone();
@@ -33,13 +33,13 @@ pub fn handle(event: Event<KeyCode>, app: &mut FML) {
                             &token,
                             &mod_dir,
                             Some(|x| {
-                                mod_.lock().unwrap().mod_item.download_info.download_perc = x;
+                                mod_.lock().unwrap().download_info.download_perc = x;
                             }),
                         )
                         .await
                         .unwrap();
 
-                        mod_.lock().unwrap().mod_item.download_info.downloaded = true;
+                        mod_.lock().unwrap().download_info.downloaded = true;
                     });
                 }
             }

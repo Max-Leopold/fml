@@ -20,10 +20,11 @@ use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
 use super::handler::handler;
-use super::install_mod_list::InstallModList;
+use super::install_mod_list::{InstallModList, ModItem};
+use super::installed_mods::InstalledMod;
 use super::manage_mod_list::ManageModList;
+use super::widgets::enabled_list::{EnabledList, EnabledListItem};
 use super::widgets::loading::Loading;
-use super::widgets::mod_list::{ModList, ModListItem};
 use super::{installed_mods, markdown, util};
 
 #[derive(Debug, Clone, Copy)]
@@ -50,20 +51,6 @@ const DEFAULT_ROUTE: Route = Route {
     tab: Tab::Manage,
 };
 
-#[derive(Debug, Clone)]
-pub struct ModItem {
-    pub mod_: api::Mod,
-    pub download_info: DownloadInfo,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct DownloadInfo {
-    pub downloaded: bool,
-    pub downloading: bool,
-    pub download_perc: u16,
-    pub versions: Vec<String>,
-}
-
 pub struct FML {
     pub install_mod_list: Arc<Mutex<InstallModList>>,
     pub manage_mod_list: Arc<Mutex<ManageModList>>,
@@ -75,15 +62,6 @@ pub struct FML {
     navigation_history: Vec<Route>,
     pub ticks: u64,
     should_quit: bool,
-}
-
-impl ModItem {
-    pub fn new(mod_: api::Mod) -> ModItem {
-        ModItem {
-            mod_,
-            download_info: DownloadInfo::default(),
-        }
-    }
 }
 
 impl FML {
@@ -129,7 +107,7 @@ impl FML {
         }
     }
 
-    async fn generate_install_mod_list(mods_dir: &str) -> Vec<ModListItem> {
+    async fn generate_install_mod_list(mods_dir: &str) -> Vec<ModItem> {
         let mods = api::get_mods(None).await.ok().unwrap();
         let installed_mods = installed_mods::read_installed_mods(mods_dir).unwrap();
         let installed_mods = installed_mods
@@ -148,23 +126,14 @@ impl FML {
                         .version
                         .clone();
                 }
-                ModListItem::new(mod_item)
+                mod_item
             })
             .collect();
         mod_list_items
     }
 
-    async fn generate_manage_mod_list(mods_dir: &str) -> Vec<ModListItem> {
-        // let installed_mods = util::read_installed_mods(mods_dir).unwrap();
-        // let mod_list_items = installed_mods
-        //     .into_iter()
-        //     .map(|mod_| {
-        //         let mod_item = ModItem::new(mod_);
-        //         ModListItem::new(mod_item)
-        //     })
-        //     .collect();
-        // mod_list_items
-        vec![]
+    async fn generate_manage_mod_list(mods_dir: &str) -> Vec<InstalledMod> {
+        installed_mods::read_installed_mods(mods_dir).unwrap()
     }
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -276,7 +245,7 @@ impl FML {
     fn draw_manage_list(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
         let items = self.manage_mod_list.lock().unwrap().items();
 
-        let list = ModList::with_items(items)
+        let list = EnabledList::with_items(items)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -333,7 +302,7 @@ impl FML {
             .split(layout);
         let items = self.install_mod_list.lock().unwrap().items(&self.filter);
 
-        let list = ModList::with_items(items)
+        let list = EnabledList::with_items(items)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -361,16 +330,16 @@ impl FML {
                 let selected_mod = selected_mod.clone();
                 let install_mod_list = self.install_mod_list.clone();
                 tokio::spawn(async move {
-                    let name = selected_mod.lock().unwrap().mod_item.mod_.name.clone();
+                    let name = selected_mod.lock().unwrap().mod_.name.clone();
                     // Small debounce so we don't spam the api
                     tokio::time::sleep(Duration::from_millis(1000)).await;
                     let new_selected_mod = install_mod_list.lock().unwrap().selected_mod();
                     if let Some(new_selected_mod) = new_selected_mod {
-                        if new_selected_mod.lock().unwrap().mod_item.mod_.name == name {
+                        if new_selected_mod.lock().unwrap().mod_.name == name {
                             // Load full mod information from api
                             match api::get_mod(&name).await {
                                 Ok(mod_) => {
-                                    selected_mod.lock().unwrap().mod_item.mod_ = mod_;
+                                    selected_mod.lock().unwrap().mod_ = mod_;
                                 }
                                 Err(err) => {
                                     selected_mod.lock().unwrap().loading = false;
@@ -397,8 +366,8 @@ impl FML {
                 )
                 .split(layout);
 
-            if selected_mod.lock().unwrap().mod_item.mod_.full == Some(true) {
-                let mod_ = selected_mod.lock().unwrap().mod_item.mod_.clone();
+            if selected_mod.lock().unwrap().mod_.full == Some(true) {
+                let mod_ = selected_mod.lock().unwrap().mod_.clone();
                 let mut text = vec![
                     Spans::from(format!("Name:      {}", mod_.title)),
                     Spans::from(format!("Downloads: {}", mod_.downloads_count)),
@@ -426,14 +395,7 @@ impl FML {
                         .title("Download Progress"),
                 )
                 .gauge_style(Style::default().fg(Color::Green))
-                .percent(
-                    selected_mod
-                        .lock()
-                        .unwrap()
-                        .mod_item
-                        .download_info
-                        .download_perc,
-                );
+                .percent(selected_mod.lock().unwrap().download_info.download_perc);
             frame.render_widget(progress, chunks[1]);
         }
     }

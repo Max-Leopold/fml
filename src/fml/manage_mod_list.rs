@@ -1,16 +1,18 @@
 use std::sync::{Arc, Mutex};
 
-use super::widgets::mod_list::{ListState, ModListItem};
+use super::install_mod_list::InstallModList;
+use super::installed_mods::InstalledMod;
+use super::widgets::enabled_list::{EnabledListItem, ListState};
 
 #[derive(Debug, Default)]
 pub struct ManageModList {
     pub state: ListState,
-    items: Option<Vec<Arc<Mutex<ModListItem>>>>,
-    filtered_items: Option<Vec<Arc<Mutex<ModListItem>>>>,
+    items: Option<Vec<Arc<Mutex<InstalledMod>>>>,
+    filtered_items: Option<Vec<Arc<Mutex<InstalledMod>>>>,
 }
 
 impl ManageModList {
-    pub fn set_items(&mut self, items: Vec<ModListItem>) {
+    pub fn set_items(&mut self, items: Vec<InstalledMod>) {
         self.items = Some(
             items
                 .into_iter()
@@ -57,7 +59,7 @@ impl ManageModList {
         self.state.select(Some(i));
     }
 
-    pub fn items(&self) -> Vec<ModListItem> {
+    pub fn items(&self) -> Vec<EnabledListItem> {
         if let None = self.items {
             return vec![];
         }
@@ -66,7 +68,10 @@ impl ManageModList {
             .as_ref()
             .unwrap()
             .iter()
-            .map(|item| item.lock().unwrap().clone())
+            .map(|item| {
+                let item = item.lock().unwrap();
+                EnabledListItem::new(item.title.clone())
+            })
             .collect()
     }
 }

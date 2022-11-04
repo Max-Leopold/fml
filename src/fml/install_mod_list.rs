@@ -1,15 +1,42 @@
-use super::widgets::mod_list::{ListState, ModListItem};
+use crate::factorio::api::{self, Mod};
+
+use super::widgets::enabled_list::{EnabledListItem, ListState};
 use std::sync::{Arc, Mutex};
+
+#[derive(Debug, Clone)]
+pub struct ModItem {
+    pub mod_: api::Mod,
+    pub loading: bool,
+    pub download_info: DownloadInfo,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DownloadInfo {
+    pub downloaded: bool,
+    pub downloading: bool,
+    pub download_perc: u16,
+    pub versions: Vec<String>,
+}
 
 #[derive(Debug, Default)]
 pub struct InstallModList {
     pub state: ListState,
-    items: Option<Vec<Arc<Mutex<ModListItem>>>>,
-    filtered_items: Option<Vec<Arc<Mutex<ModListItem>>>>,
+    pub items: Option<Vec<Arc<Mutex<ModItem>>>>,
+    pub filtered_items: Option<Vec<Arc<Mutex<ModItem>>>>,
+}
+
+impl ModItem {
+    pub fn new(mod_: api::Mod) -> ModItem {
+        ModItem {
+            mod_,
+            loading: false,
+            download_info: DownloadInfo::default(),
+        }
+    }
 }
 
 impl InstallModList {
-    pub fn set_items(&mut self, items: Vec<ModListItem>) {
+    pub fn set_items(&mut self, items: Vec<ModItem>) {
         self.items = Some(
             items
                 .into_iter()
@@ -64,7 +91,7 @@ impl InstallModList {
         self.state.select(Some(i));
     }
 
-    pub fn selected_mod(&self) -> Option<Arc<Mutex<ModListItem>>> {
+    pub fn selected_mod(&self) -> Option<Arc<Mutex<ModItem>>> {
         if let None = self.filtered_items {
             return None;
         }
@@ -78,7 +105,7 @@ impl InstallModList {
         }
     }
 
-    pub fn items(&mut self, filter: &String) -> Vec<ModListItem> {
+    pub fn items(&mut self, filter: &String) -> Vec<EnabledListItem> {
         if let None = self.items {
             return vec![];
         }
@@ -89,7 +116,7 @@ impl InstallModList {
                 .unwrap()
                 .iter()
                 .filter(|item| {
-                    let mod_ = &item.lock().unwrap().mod_item.mod_;
+                    let mod_ = &item.lock().unwrap().mod_;
                     mod_.name.to_lowercase().contains(&filter.to_lowercase())
                         || mod_.title.to_lowercase().contains(&filter.to_lowercase())
                 })
@@ -101,7 +128,11 @@ impl InstallModList {
             .as_ref()
             .unwrap()
             .iter()
-            .map(|item| item.lock().unwrap().clone())
+            .map(|item| {
+                let mod_item = &item.lock().unwrap();
+                EnabledListItem::new(mod_item.mod_.title.clone())
+                    .enabled(mod_item.download_info.downloaded)
+            })
             .collect()
     }
 }

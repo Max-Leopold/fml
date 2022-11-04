@@ -5,8 +5,6 @@ use tui::text::Text;
 use tui::widgets::{Block, StatefulWidget, Widget};
 use unicode_width::UnicodeWidthStr;
 
-use crate::fml::app::ModItem;
-
 #[derive(Debug, Clone, Default)]
 pub struct ListState {
     offset: usize,
@@ -27,23 +25,28 @@ impl ListState {
 }
 
 #[derive(Debug, Clone)]
-pub struct ModListItem {
-    pub mod_item: ModItem,
-    pub loading: bool,
+pub struct EnabledListItem {
+    content: String,
+    enabled: bool,
     style: Style,
 }
 
-impl ModListItem {
-    pub fn new(mod_item: ModItem) -> ModListItem {
-        ModListItem {
-            mod_item,
+impl EnabledListItem {
+    pub fn new(content: String) -> EnabledListItem {
+        EnabledListItem {
+            content,
+            enabled: false,
             style: Style::default(),
-            loading: false,
         }
     }
 
-    pub fn style(mut self, style: Style) -> ModListItem {
+    pub fn style(mut self, style: Style) -> EnabledListItem {
         self.style = style;
+        self
+    }
+
+    pub fn enabled(mut self, enabled: bool) -> EnabledListItem {
+        self.enabled = enabled;
         self
     }
 
@@ -52,7 +55,11 @@ impl ModListItem {
     }
 
     pub fn content(&self) -> Text {
-        self.mod_item.mod_.title.clone().into()
+        self.content.clone().into()
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
     }
 }
 
@@ -71,9 +78,9 @@ impl ModListItem {
 ///     .highlight_symbol(">>");
 /// ```
 #[derive(Debug, Clone)]
-pub struct ModList<'a> {
+pub struct EnabledList<'a> {
     block: Option<Block<'a>>,
-    items: Vec<ModListItem>,
+    items: Vec<EnabledListItem>,
     /// Style used as a base style for the widget
     style: Style,
     start_corner: Corner,
@@ -86,12 +93,12 @@ pub struct ModList<'a> {
     repeat_highlight_symbol: bool,
 }
 
-impl<'a> ModList<'a> {
-    pub fn with_items<T>(items: T) -> ModList<'a>
+impl<'a> EnabledList<'a> {
+    pub fn with_items<T>(items: T) -> EnabledList<'a>
     where
-        T: Into<Vec<ModListItem>>,
+        T: Into<Vec<EnabledListItem>>,
     {
-        ModList {
+        EnabledList {
             block: None,
             style: Style::default(),
             items: items.into(),
@@ -103,37 +110,37 @@ impl<'a> ModList<'a> {
         }
     }
 
-    pub fn block(mut self, block: Block<'a>) -> ModList<'a> {
+    pub fn block(mut self, block: Block<'a>) -> EnabledList<'a> {
         self.block = Some(block);
         self
     }
 
-    pub fn style(mut self, style: Style) -> ModList<'a> {
+    pub fn style(mut self, style: Style) -> EnabledList<'a> {
         self.style = style;
         self
     }
 
-    pub fn highlight_symbol(mut self, highlight_symbol: &'a str) -> ModList<'a> {
+    pub fn highlight_symbol(mut self, highlight_symbol: &'a str) -> EnabledList<'a> {
         self.highlight_symbol = Some(highlight_symbol);
         self
     }
 
-    pub fn installed_symbol(mut self, installed_symbol: &'a str) -> ModList<'a> {
+    pub fn installed_symbol(mut self, installed_symbol: &'a str) -> EnabledList<'a> {
         self.installed_symbol = Some(installed_symbol);
         self
     }
 
-    pub fn highlight_style(mut self, style: Style) -> ModList<'a> {
+    pub fn highlight_style(mut self, style: Style) -> EnabledList<'a> {
         self.highlight_style = style;
         self
     }
 
-    pub fn repeat_highlight_symbol(mut self, repeat: bool) -> ModList<'a> {
+    pub fn repeat_highlight_symbol(mut self, repeat: bool) -> EnabledList<'a> {
         self.repeat_highlight_symbol = repeat;
         self
     }
 
-    pub fn start_corner(mut self, corner: Corner) -> ModList<'a> {
+    pub fn start_corner(mut self, corner: Corner) -> EnabledList<'a> {
         self.start_corner = corner;
         self
     }
@@ -177,7 +184,7 @@ impl<'a> ModList<'a> {
     }
 }
 
-impl<'a> StatefulWidget for ModList<'a> {
+impl<'a> StatefulWidget for EnabledList<'a> {
     type State = ListState;
 
     fn render(mut self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
@@ -247,7 +254,7 @@ impl<'a> StatefulWidget for ModList<'a> {
                     &blank_symbol
                 };
 
-                let symbol = if item.mod_item.download_info.downloaded {
+                let symbol = if item.is_enabled() {
                     installed_symbol
                 } else {
                     symbol
@@ -273,7 +280,7 @@ impl<'a> StatefulWidget for ModList<'a> {
     }
 }
 
-impl<'a> Widget for ModList<'a> {
+impl<'a> Widget for EnabledList<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let mut state = ListState::default();
         StatefulWidget::render(self, area, buf, &mut state);
