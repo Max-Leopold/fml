@@ -465,8 +465,20 @@ impl FML {
         self.navigation_history.pop();
     }
 
-    pub fn save(&mut self) {
-        todo!("Save installed mods to mod-list.json")
+    pub fn save(&self) {
+        self.manage_mod_list
+            .lock()
+            .unwrap()
+            .generate_mod_list()
+            .save(&self.fml_config.mods_dir_path)
+            .unwrap();
+        // todo!("Save installed mods to mod-list.json")
+    }
+
+    pub fn delete_mod(&mut self, mod_name: &str) {
+        installed_mods::delete_mod(mod_name, &self.fml_config.mods_dir_path).unwrap();
+
+        self.manage_mod_list.lock().unwrap().remove_mod(mod_name);
     }
 }
 

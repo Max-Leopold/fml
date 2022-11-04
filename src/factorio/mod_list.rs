@@ -57,7 +57,7 @@ impl ModList {
         }
     }
 
-    pub fn save(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(&self, mods_dir_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let internal_mod_config = InternalModList {
             mods: self
                 .mods
@@ -70,7 +70,8 @@ impl ModList {
                 .collect(),
         };
         let json = serde_json::to_string_pretty(&internal_mod_config)?;
-        std::fs::write(file_path, json)?;
+        let path = Path::new(mods_dir_path).join("mod-list.json");
+        std::fs::write(path, json)?;
         Ok(())
     }
 }

@@ -63,3 +63,14 @@ pub fn read_installed_mods(
     installed_mods.sort_by(|a, b| a.title.cmp(&b.title));
     Ok(installed_mods)
 }
+
+pub fn delete_mod(mod_name: &str, mods_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let files = std::fs::read_dir(mods_dir)?;
+    for file in files {
+        let file = file?;
+        if file.file_name().to_str().unwrap().starts_with(mod_name) {
+            std::fs::remove_file(file.path())?;
+        }
+    }
+    Ok(())
+}
