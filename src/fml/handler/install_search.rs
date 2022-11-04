@@ -6,11 +6,11 @@ pub fn handle(event: Event<KeyCode>, app: &mut FML) {
         Event::Input(ref input) => match input {
             KeyCode::Char(c) => {
                 app.install_mod_list.lock().unwrap().reset_selected();
-                app.filter.push(*c);
+                app.install_mod_list.lock().unwrap().filter.push(*c);
             }
             KeyCode::Backspace => {
                 app.install_mod_list.lock().unwrap().reset_selected();
-                app.filter.pop();
+                app.install_mod_list.lock().unwrap().filter.pop();
             }
             KeyCode::Enter => {
                 app.navigate_block(ActiveBlock::InstallModList);

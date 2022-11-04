@@ -57,7 +57,6 @@ pub struct FML {
     pub server_settings: server_settings::ServerSettings,
     pub fml_config: FmlConfig,
     pub events: Events,
-    pub filter: String,
     navigation_history: Vec<Route>,
     pub ticks: u64,
     should_quit: bool,
@@ -90,7 +89,6 @@ impl FML {
                 .set_items(mod_list_items, mod_list);
         });
         let events = Events::with_config(None);
-        let filter = String::new();
         let ticks = 0;
         let should_quit = false;
         let navigation_history = vec![DEFAULT_ROUTE];
@@ -101,7 +99,6 @@ impl FML {
             server_settings,
             fml_config,
             events,
-            filter,
             navigation_history,
             ticks,
             should_quit,
@@ -301,7 +298,11 @@ impl FML {
                 .as_ref(),
             )
             .split(layout);
-        let items = self.install_mod_list.lock().unwrap().items(&self.filter);
+        let items = self
+            .install_mod_list
+            .lock()
+            .unwrap()
+            .items();
 
         let list = EnabledList::with_items(items)
             .block(
@@ -402,7 +403,7 @@ impl FML {
     }
 
     fn draw_search_bar(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let mut search_string = self.filter.clone();
+        let mut search_string = self.install_mod_list.lock().unwrap().filter.clone();
         if self.active_block() == ActiveBlock::InstallSearch {
             search_string += "█";
         }
