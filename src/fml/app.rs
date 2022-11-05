@@ -241,6 +241,35 @@ impl FML {
             .style(Style::default().fg(Color::White))
             .highlight_style(Style::default().fg(Color::Yellow));
 
+        let download_gauge = self.mod_downloader.generate_gauge();
+        let rect = match download_gauge {
+            Some(_) => {
+                let chunks = Layout::default()
+                    .direction(tui::layout::Direction::Horizontal)
+                    .constraints(
+                        [
+                            tui::layout::Constraint::Percentage(50),
+                            tui::layout::Constraint::Percentage(50),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(rect);
+
+                let download_gauge = download_gauge
+                    .unwrap()
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Download Progress"),
+                    )
+                    .gauge_style(Style::default().fg(Color::Green));
+
+                frame.render_widget(download_gauge, chunks[1]);
+                chunks[0]
+            }
+            None => rect,
+        };
+
         frame.render_widget(tabs, rect);
     }
 
@@ -447,17 +476,6 @@ impl FML {
                     .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
                 frame.render_widget(loading, chunks[0]);
             }
-
-            let download_gauge = self
-                .mod_downloader
-                .generate_gauge()
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Download Progress"),
-                )
-                .gauge_style(Style::default().fg(Color::Green));
-            frame.render_widget(download_gauge, chunks[1]);
         }
     }
 

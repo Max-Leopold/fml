@@ -37,54 +37,68 @@ impl ModDownloader {
         let currently_downloading_clone = currently_downloading.clone();
         tokio::spawn(async move {
             loop {
-                let request = rx.recv().await.unwrap();
-                // The base mod is always a dependency but it's not actually a mod but instead the base game.
-                // So we just skip it when asked to download because it's not available on the mod portal.
-                if request.mod_name == "base" {
-                    continue;
-                }
-                let mod_ = api::get_mod(&request.mod_name).await.unwrap();
-                *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
-                let mut file = api::download_mod(
-                    &mod_,
-                    &request.username,
-                    &request.token,
-                    &request.mod_dir,
-                    Some(|x| {
-                        *download_perc_clone.lock().unwrap() = x;
-                    }),
-                )
-                .await
-                .unwrap();
+                let download_request = rx.recv();
+                let debounce = tokio::time::sleep(std::time::Duration::from_millis(250));
 
-                // Download all mod dependencies
-                for dependency in mod_
-                    .latest_release()
-                    .info_json
-                    .dependencies
-                    .unwrap_or(Dependencies::default())
-                    .required
-                    .iter()
-                {
-                    tx.send(ModDownloadRequest {
-                        mod_name: dependency.name.clone(),
-                        username: request.username.clone(),
-                        token: request.token.clone(),
-                        mod_dir: request.mod_dir.clone(),
-                    })
-                    .unwrap();
-                }
+                tokio::select! {
+                    _ = debounce => {
+                        *download_perc_clone.lock().unwrap() = 0;
+                        *currently_downloading_clone.lock().unwrap() = String::new();
+                    }
+                    maybe_download_request = download_request => {
+                      match maybe_download_request {
+                        Some(download_request) => {
+                          // The base mod is always a dependency but it's not actually a mod but instead the base game.
+                          // So we just skip it when asked to download because it's not available on the mod portal.
+                          if download_request.mod_name == "base" {
+                              continue;
+                          }
+                          let mod_ = api::get_mod(&download_request.mod_name).await.unwrap();
+                          *download_perc_clone.lock().unwrap() = 0;
+                          *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
 
-                install_mod_list
-                    .lock()
-                    .unwrap()
-                    .enable_mod(&request.mod_name);
-                if let Some(installed_mod) = installed_mods::parse_installed_mod(&mut file) {
-                    manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
-                }
+                          let mut file = api::download_mod(
+                              &mod_,
+                              &download_request.username,
+                              &download_request.token,
+                              &download_request.mod_dir,
+                              Some(|x| {
+                                  *download_perc_clone.lock().unwrap() = x;
+                              }),
+                          )
+                          .await
+                          .unwrap();
 
-                *download_perc_clone.lock().unwrap() = 0;
-                *currently_downloading_clone.lock().unwrap() = String::new();
+                          // Download all mod dependencies
+                          for dependency in mod_
+                              .latest_release()
+                              .info_json
+                              .dependencies
+                              .unwrap_or(Dependencies::default())
+                              .required
+                              .iter()
+                          {
+                              tx.send(ModDownloadRequest {
+                                  mod_name: dependency.name.clone(),
+                                  username: download_request.username.clone(),
+                                  token: download_request.token.clone(),
+                                  mod_dir: download_request.mod_dir.clone(),
+                              })
+                              .unwrap();
+                          }
+
+                          install_mod_list
+                              .lock()
+                              .unwrap()
+                              .enable_mod(&download_request.mod_name);
+                          if let Some(installed_mod) = installed_mods::parse_installed_mod(&mut file) {
+                              manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
+                          }
+                        }
+                        _ => {}
+                      }
+                    }
+                }
             }
         });
 
@@ -95,11 +109,15 @@ impl ModDownloader {
         }
     }
 
-    pub fn generate_gauge(&self) -> Gauge {
+    pub fn generate_gauge(&self) -> Option<Gauge> {
+        if self.currently_downloading.lock().unwrap().is_empty() {
+            return None;
+        }
+
         let gauge = Gauge::default()
             .percent(self.download_perc.lock().unwrap().clone())
             .label(self.currently_downloading.lock().unwrap().clone());
 
-        gauge
+        Some(gauge)
     }
 }
