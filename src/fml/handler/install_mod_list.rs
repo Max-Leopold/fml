@@ -1,4 +1,3 @@
-use crate::factorio::api;
 use crate::fml::app::{ActiveBlock, FML};
 use crate::fml::event::{Event, KeyCode};
 

@@ -4,8 +4,6 @@ use std::io::Cursor;
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
-use std::path::Path;
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;

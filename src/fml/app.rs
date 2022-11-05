@@ -367,10 +367,53 @@ impl FML {
             if selected_mod.lock().unwrap().mod_.full == Some(true) {
                 let mod_ = selected_mod.lock().unwrap().mod_.clone();
                 let mut text = vec![
-                    Spans::from(format!("Name:      {}", mod_.title)),
+                    Spans::from(format!("Name: {}", mod_.title)),
                     Spans::from(format!("Downloads: {}", mod_.downloads_count)),
                     Spans::from("".to_string()),
                 ];
+                let dependencies = mod_.latest_release().info_json.dependencies.unwrap();
+                let required_dependencies = dependencies.required.iter().map(|d| {
+                    Spans::from(format!(
+                        "- {} {} {}",
+                        d.name,
+                        d.equality.as_ref().unwrap_or(&String::new()),
+                        d.version.as_ref().unwrap_or(&String::new())
+                    ))
+                });
+                if required_dependencies.len() > 0 {
+                    text.push(Spans::from("Required Dependencies:"));
+                    text.extend(required_dependencies);
+                    text.push(Spans::from("".to_string()));
+                }
+
+                let optional_dependencies = dependencies.optional.iter().map(|d| {
+                    Spans::from(format!(
+                        "- {} {} {}",
+                        d.name,
+                        d.equality.as_ref().unwrap_or(&String::new()),
+                        d.version.as_ref().unwrap_or(&String::new())
+                    ))
+                });
+                if optional_dependencies.len() > 0 {
+                    text.push(Spans::from("Optional Dependencies:"));
+                    text.extend(optional_dependencies);
+                    text.push(Spans::from("".to_string()));
+                }
+
+                let incompatible_dependencies = dependencies.incompatible.iter().map(|d| {
+                    Spans::from(format!(
+                        "- {} {} {}",
+                        d.name,
+                        d.equality.as_ref().unwrap_or(&String::new()),
+                        d.version.as_ref().unwrap_or(&String::new())
+                    ))
+                });
+                if incompatible_dependencies.len() > 0 {
+                    text.push(Spans::from("Incompatible Dependencies:"));
+                    text.extend(incompatible_dependencies);
+                    text.push(Spans::from("".to_string()));
+                }
+
                 let description = mod_.description.unwrap_or("".to_string());
                 let mut desc = markdown::Parser::new(&description).to_spans();
                 text.append(&mut desc);
