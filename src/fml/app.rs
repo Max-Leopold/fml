@@ -37,6 +37,7 @@ pub enum Tab {
 pub enum ActiveBlock {
     InstallModList,
     InstallSearch,
+    InstallModDetails,
     ManageModList,
     QuitPopup,
 }
@@ -60,6 +61,7 @@ pub struct FML {
     navigation_history: Vec<Route>,
     pub ticks: u64,
     should_quit: bool,
+    pub scroll_offset: u16,
 }
 
 impl FML {
@@ -92,6 +94,7 @@ impl FML {
         let ticks = 0;
         let should_quit = false;
         let navigation_history = vec![DEFAULT_ROUTE];
+        let scroll_offset = 0;
 
         FML {
             install_mod_list,
@@ -102,6 +105,7 @@ impl FML {
             navigation_history,
             ticks,
             should_quit,
+            scroll_offset,
         }
     }
 
@@ -418,12 +422,23 @@ impl FML {
                 let mut desc = markdown::Parser::new(&description).to_spans();
                 text.append(&mut desc);
                 let text = Paragraph::new(text)
-                    .block(Block::default().borders(Borders::ALL).title("Mod Info"))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Mod Info")
+                            .border_style(self.block_style(ActiveBlock::InstallModDetails)),
+                    )
+                    .scroll((self.scroll_offset, 0))
                     .wrap(Wrap { trim: true });
                 frame.render_widget(text, chunks[0]);
             } else {
                 let loading = Loading::new()
-                    .block(Block::default().borders(Borders::ALL).title("Mod Info"))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Mod Info")
+                            .border_style(self.block_style(ActiveBlock::InstallModDetails)),
+                    )
                     .ticks(self.ticks)
                     .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
                 frame.render_widget(loading, chunks[0]);
@@ -494,7 +509,9 @@ impl FML {
     pub fn navigate_block(&mut self, active_block: ActiveBlock) {
         let tab = match active_block {
             ActiveBlock::ManageModList => Tab::Manage,
-            ActiveBlock::InstallModList | ActiveBlock::InstallSearch => Tab::Install,
+            ActiveBlock::InstallModList
+            | ActiveBlock::InstallSearch
+            | ActiveBlock::InstallModDetails => Tab::Install,
             ActiveBlock::QuitPopup => self.current_tab(),
         };
 
@@ -503,6 +520,16 @@ impl FML {
 
     pub fn undo_navigation(&mut self) {
         self.navigation_history.pop();
+    }
+
+    pub fn scroll_up(&mut self) {
+        if self.scroll_offset > 0 {
+            self.scroll_offset -= 1;
+        }
+    }
+
+    pub fn scroll_down(&mut self) {
+        self.scroll_offset += 1;
     }
 
     pub fn save(&self) {

@@ -30,6 +30,8 @@ pub enum KeyCode {
     Tab,
     Up,
     Down,
+    Right,
+    Left,
     Enter,
     Backspace,
     Esc,
@@ -64,6 +66,8 @@ impl Events {
                           let key_code: KeyCode = match key_event.code {
                             crossterm::event::KeyCode::Up => KeyCode::Up,
                             crossterm::event::KeyCode::Down => KeyCode::Down,
+                            crossterm::event::KeyCode::Left => KeyCode::Left,
+                            crossterm::event::KeyCode::Right => KeyCode::Right,
                             crossterm::event::KeyCode::Enter => KeyCode::Enter,
                             crossterm::event::KeyCode::Backspace => KeyCode::Backspace,
                             crossterm::event::KeyCode::Tab => KeyCode::Tab,

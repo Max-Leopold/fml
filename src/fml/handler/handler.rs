@@ -1,7 +1,7 @@
 use crate::fml::app::{ActiveBlock, Tab, FML};
 use crate::fml::event::{Event, KeyCode};
 
-use super::{install_mod_list, install_search, manage_mod_list, quit_popup};
+use super::{install_mod_list, install_search, manage_mod_list, quit_popup, install_mod_details};
 
 pub fn handle(event: Event<KeyCode>, app: &mut FML) {
     match event {
@@ -30,6 +30,9 @@ pub fn handle(event: Event<KeyCode>, app: &mut FML) {
                 ActiveBlock::QuitPopup => {
                     quit_popup::handle(event, app)
                 }
+                ActiveBlock::InstallModDetails => {
+                    install_mod_details::handle(event, app)
+                },
             },
         },
         Event::Tick => app.ticks += 1,
