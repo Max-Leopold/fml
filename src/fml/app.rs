@@ -23,6 +23,7 @@ use super::event::{Event, Events, KeyCode};
 use super::handler::handler;
 use super::install_mod_list::{InstallModItem, InstallModList};
 use super::manage_mod_list::ManageModList;
+use super::mod_downloader::{ModDownloadRequest, ModDownloader};
 use super::widgets::enabled_list::EnabledList;
 use super::widgets::loading::Loading;
 use super::{markdown, util};
@@ -58,6 +59,7 @@ pub struct FML {
     pub server_settings: server_settings::ServerSettings,
     pub fml_config: FmlConfig,
     pub events: Events,
+    mod_downloader: ModDownloader,
     navigation_history: Vec<Route>,
     pub ticks: u64,
     should_quit: bool,
@@ -91,6 +93,7 @@ impl FML {
                 .set_items(mod_list_items, mod_list);
         });
         let events = Events::with_config(None);
+        let mod_downloader = ModDownloader::new(install_mod_list.clone(), manage_mod_list.clone());
         let ticks = 0;
         let should_quit = false;
         let navigation_history = vec![DEFAULT_ROUTE];
@@ -102,6 +105,7 @@ impl FML {
             server_settings,
             fml_config,
             events,
+            mod_downloader,
             navigation_history,
             ticks,
             should_quit,
@@ -444,15 +448,16 @@ impl FML {
                 frame.render_widget(loading, chunks[0]);
             }
 
-            let progress = Gauge::default()
+            let download_gauge = self
+                .mod_downloader
+                .generate_gauge()
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
                         .title("Download Progress"),
                 )
-                .gauge_style(Style::default().fg(Color::Green))
-                .percent(selected_mod.lock().unwrap().download_info.download_perc);
-            frame.render_widget(progress, chunks[1]);
+                .gauge_style(Style::default().fg(Color::Green));
+            frame.render_widget(download_gauge, chunks[1]);
         }
     }
 
@@ -550,31 +555,17 @@ impl FML {
     }
 
     pub fn install_mod(&self, mod_: Arc<Mutex<InstallModItem>>) {
-        let factorio_mod = &mod_.lock().unwrap().mod_.clone();
-        let token = self.server_settings.token.clone();
-        let username = self.server_settings.username.clone();
-        let mod_name = factorio_mod.name.clone();
-        let mod_dir = self.fml_config.mods_dir_path.clone();
-        let manage_mod_list = self.manage_mod_list.clone();
-        tokio::spawn(async move {
-            let mut file = api::download_mod(
-                &mod_name,
-                &username,
-                &token,
-                &mod_dir,
-                Some(|x| {
-                    mod_.lock().unwrap().download_info.download_perc = x;
-                }),
-            )
-            .await
+        let mod_ = mod_.lock().unwrap().clone();
+
+        self.mod_downloader
+            .tx
+            .send(ModDownloadRequest {
+                mod_name: mod_.mod_.name.clone(),
+                username: self.server_settings.username.clone(),
+                token: self.server_settings.token.clone(),
+                mod_dir: self.fml_config.mods_dir_path.clone(),
+            })
             .unwrap();
-
-            mod_.lock().unwrap().download_info.downloaded = true;
-
-            if let Some(installed_mod) = installed_mods::parse_installed_mod(&mut file) {
-                manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
-            }
-        });
     }
 }
 

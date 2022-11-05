@@ -56,8 +56,13 @@ impl InstallModList {
             .iter()
             .filter(|mod_item| {
                 let mod_ = &mod_item.lock().unwrap().mod_;
-                mod_.name.to_lowercase().contains(&self.filter)
-                    || mod_.title.to_lowercase().contains(&self.filter)
+                mod_.name
+                    .to_lowercase()
+                    .contains(&self.filter.to_lowercase())
+                    || mod_
+                        .title
+                        .to_lowercase()
+                        .contains(&self.filter.to_lowercase())
             })
             .map(|mod_| mod_.clone())
             .collect()
@@ -123,6 +128,17 @@ impl InstallModList {
 
         if let Some(mod_) = mod_ {
             mod_.lock().unwrap().download_info.downloaded = false;
+        }
+    }
+
+    pub fn enable_mod(&mut self, mod_name: &str) {
+        let mod_ = self
+            .items
+            .iter()
+            .find(|mod_item| mod_item.lock().unwrap().mod_.name == mod_name);
+
+        if let Some(mod_) = mod_ {
+            mod_.lock().unwrap().download_info.downloaded = true;
         }
     }
 

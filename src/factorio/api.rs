@@ -169,13 +169,12 @@ pub async fn get_mod(name: &str) -> Result<Mod, reqwest::Error> {
 }
 
 pub async fn download_mod<F: Fn(u16)>(
-    mod_name: &str,
+    mod_: &Mod,
     username: &str,
     token: &str,
     dir: &str,
     f: Option<F>,
 ) -> Result<File, Box<dyn Error>> {
-    let mod_ = get_mod(mod_name).await?;
     let url = format!(
         "https://mods.factorio.com{}?username={}&token={}",
         mod_.latest_release.as_ref().unwrap().download_url,
