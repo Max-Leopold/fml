@@ -56,7 +56,8 @@ impl InstallModList {
             .iter()
             .filter(|mod_item| {
                 let mod_ = &mod_item.lock().unwrap().mod_;
-                mod_.name.contains(&self.filter) || mod_.title.contains(&self.filter)
+                mod_.name.to_lowercase().contains(&self.filter)
+                    || mod_.title.to_lowercase().contains(&self.filter)
             })
             .map(|mod_| mod_.clone())
             .collect()
