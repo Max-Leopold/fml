@@ -3,6 +3,34 @@ use std::cmp;
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::text::{Span, Spans, Text};
 
+#[macro_export]
+macro_rules! skip_err {
+    ($res:expr) => {
+        match $res {
+            Ok(val) => val,
+            Err(e) => {
+                log::info!("Error occured: {}; Skipping.", e);
+                continue;
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! skip_none {
+    ($res:expr) => {
+        match $res {
+            Some(val) => val,
+            None => {
+                log::info!("Skipping None value.");
+                continue;
+            }
+        }
+    };
+}
+
+
+
 pub fn centered_rect(size_x: u16, size_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)

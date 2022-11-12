@@ -115,7 +115,13 @@ impl FML {
 
     async fn generate_install_mod_list(mods_dir: &str) -> Vec<InstallModItem> {
         let mods = api::get_mods(None).await.ok().unwrap();
-        let installed_mods = installed_mods::read_installed_mods(mods_dir).unwrap();
+        let installed_mods = match installed_mods::read_installed_mods(mods_dir) {
+            Ok(mods) => mods,
+            Err(e) => {
+                log::error!("Error reading installed mods: {}", e);
+                vec![]
+            },
+        };
         let installed_mods = installed_mods
             .into_iter()
             .map(|mod_| (mod_.name.clone(), mod_))
@@ -139,7 +145,13 @@ impl FML {
     }
 
     fn generate_manage_mod_list(mods_dir: &str) -> Vec<InstalledMod> {
-        installed_mods::read_installed_mods(mods_dir).unwrap()
+        match installed_mods::read_installed_mods(mods_dir) {
+            Ok(mods) => mods,
+            Err(e) => {
+                log::error!("Error reading installed mods: {}", e);
+                vec![]
+            }
+        }
     }
 
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
