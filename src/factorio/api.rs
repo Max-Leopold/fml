@@ -1,7 +1,9 @@
+use core::fmt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::cmp::min;
 use std::error::Error;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 
@@ -73,7 +75,44 @@ pub struct Dependencies {
 pub struct Dependency {
     pub name: String,
     pub equality: Option<String>,
-    pub version: Option<String>,
+    pub version: Option<Version>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Version {
+    pub major: i64,
+    pub minor: i64,
+    pub patch: i64,
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+impl Version {
+    pub fn from_str(version: &str) -> Version {
+        let mut version_parts = version.split('.');
+        let major = version_parts
+            .next()
+            .and_then(|part| part.parse::<i64>().ok())
+            .unwrap_or(0);
+        let minor = version_parts
+            .next()
+            .and_then(|part| part.parse::<i64>().ok())
+            .unwrap_or(0);
+        let patch = version_parts
+            .next()
+            .and_then(|part| part.parse::<i64>().ok())
+            .unwrap_or(0);
+
+        Version {
+            major,
+            minor,
+            patch,
+        }
+    }
 }
 
 fn deserialize_dependencies<'de, D>(deserializer: D) -> Result<Option<Dependencies>, D::Error>
@@ -98,22 +137,19 @@ where
         let mod_name = captures.name("mod_name").unwrap().as_str().trim();
 
         let prefix = captures.name("prefix");
-        let prefix = if prefix.is_some() {
-            Some(prefix.unwrap().as_str().trim())
-        } else {
-            None
+        let prefix = match prefix {
+            Some(prefix) => Some(prefix.as_str().trim()),
+            None => None,
         };
         let equality = captures.name("equality");
-        let equality = if equality.is_some() {
-            Some(equality.unwrap().as_str().trim().to_string())
-        } else {
-            None
+        let equality = match equality {
+            Some(equality) => Some(equality.as_str().trim().to_string()),
+            None => None,
         };
         let version = captures.name("version");
-        let version = if version.is_some() {
-            Some(version.unwrap().as_str().trim().to_string())
-        } else {
-            None
+        let version = match version {
+            Some(version) => Some(Version::from_str(version.as_str().trim())),
+            None => None,
         };
 
         let dependency = Dependency {

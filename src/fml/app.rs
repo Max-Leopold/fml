@@ -15,6 +15,7 @@ use tui::text::{Spans, Text};
 use tui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
+use crate::factorio::api::Version;
 use crate::factorio::installed_mods::InstalledMod;
 use crate::factorio::{api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
@@ -426,7 +427,7 @@ impl FML {
                         "- {} {} {}",
                         d.name,
                         d.equality.as_ref().unwrap_or(&String::new()),
-                        d.version.as_ref().unwrap_or(&String::new())
+                        d.version.as_ref().and_then(|v| Some(v.to_string())).unwrap_or("".to_string())
                     ))
                 });
                 if required_dependencies.len() > 0 {
@@ -440,7 +441,7 @@ impl FML {
                         "- {} {} {}",
                         d.name,
                         d.equality.as_ref().unwrap_or(&String::new()),
-                        d.version.as_ref().unwrap_or(&String::new())
+                        d.version.as_ref().and_then(|v| Some(v.to_string())).unwrap_or("".to_string())
                     ))
                 });
                 if optional_dependencies.len() > 0 {
@@ -454,7 +455,7 @@ impl FML {
                         "- {} {} {}",
                         d.name,
                         d.equality.as_ref().unwrap_or(&String::new()),
-                        d.version.as_ref().unwrap_or(&String::new())
+                        d.version.as_ref().and_then(|v| Some(v.to_string())).unwrap_or("".to_string())
                     ))
                 });
                 if incompatible_dependencies.len() > 0 {
