@@ -403,17 +403,6 @@ impl FML {
                 });
             }
 
-            let chunks = Layout::default()
-                .direction(tui::layout::Direction::Vertical)
-                .constraints(
-                    [
-                        tui::layout::Constraint::Min(3),
-                        tui::layout::Constraint::Length(3),
-                    ]
-                    .as_ref(),
-                )
-                .split(layout);
-
             if selected_mod.lock().unwrap().mod_.full == Some(true) {
                 let mod_ = selected_mod.lock().unwrap().mod_.clone();
                 let mut text = vec![
@@ -476,7 +465,7 @@ impl FML {
                     )
                     .scroll((self.scroll_offset, 0))
                     .wrap(Wrap { trim: true });
-                frame.render_widget(text, chunks[0]);
+                frame.render_widget(text, layout);
             } else {
                 let loading = Loading::new()
                     .block(
@@ -487,7 +476,7 @@ impl FML {
                     )
                     .ticks(self.ticks)
                     .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
-                frame.render_widget(loading, chunks[0]);
+                frame.render_widget(loading, layout);
             }
         }
     }
