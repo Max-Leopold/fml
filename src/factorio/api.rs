@@ -1,13 +1,15 @@
 use core::fmt;
+use fs2::FileExt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::cmp::min;
 use std::error::Error;
-use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 
 use serde::{Deserialize, Serialize};
+
+use crate::skip_none;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,7 +125,7 @@ where
     if dependencies.is_none() {
         return Ok(None);
     }
-    let dependencies = dependencies.unwrap();
+    let dependencies = dependencies.unwrap_or(Vec::new());
 
     let mut required_dependencies = Vec::new();
     let mut optional_dependencies = Vec::new();
@@ -133,8 +135,9 @@ where
         lazy_static! {
             static ref RE: Regex = Regex::new(r"^(?P<prefix>[!?~()]*)\s*(?P<mod_name>\S[^>=<]+)\s*(?P<equality>[=<>]+)?\s*(?P<version>\S+)?\s*$").unwrap();
         }
-        let captures = RE.captures(&dependency).unwrap();
-        let mod_name = captures.name("mod_name").unwrap().as_str().trim();
+        let captures = skip_none!(RE.captures(&dependency));
+        let mod_name = skip_none!(captures.name("mod_name"));
+        let mod_name = mod_name.as_str().trim();
 
         let prefix = captures.name("prefix");
         let prefix = match prefix {
@@ -179,18 +182,20 @@ where
 }
 
 impl Mod {
-    pub fn latest_release(&self) -> Release {
-        if let Some(true) = self.full {
-            return self.releases.as_ref().unwrap().last().unwrap().clone();
+    pub fn latest_release(&self) -> Option<Release> {
+        match self.latest_release {
+            Some(ref latest_release) => Some(latest_release.clone()),
+            None => match self.releases {
+                Some(ref releases) => releases.first().cloned(),
+                None => None,
+            },
         }
-
-        self.latest_release.as_ref().unwrap().clone()
     }
 }
 
 pub async fn get_mods(sort_by: Option<SortBy>) -> Result<Vec<Mod>, Box<dyn std::error::Error>> {
     let url = "https://mods.factorio.com/api/mods?page_size=max";
-    let mut mods = reqwest::get(url).await?.json::<Mods>().await.unwrap();
+    let mut mods = reqwest::get(url).await?.json::<Mods>().await?;
     let sort_by = sort_by.unwrap_or(SortBy::Downloads);
     mods.sort(sort_by);
     Ok(mods.results)
@@ -200,7 +205,6 @@ pub async fn get_mod(name: &str) -> Result<Mod, reqwest::Error> {
     let url = format!("https://mods.factorio.com/api/mods/{}/full", name);
     let mut response = reqwest::get(url).await?.json::<Mod>().await?;
     response.full = Some(true);
-    response.latest_release = Some(response.releases.as_ref().unwrap().last().unwrap().clone());
     Ok(response)
 }
 
@@ -211,25 +215,30 @@ pub async fn download_mod<F: Fn(u16)>(
     dir: &str,
     f: Option<F>,
 ) -> Result<File, Box<dyn Error>> {
+    let latest_release = mod_.latest_release();
+    if latest_release.is_none() {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No releases found",
+        )));
+    }
+
+    let latest_release = latest_release.unwrap();
     let url = format!(
         "https://mods.factorio.com{}?username={}&token={}",
-        mod_.latest_release.as_ref().unwrap().download_url,
-        username,
-        token
+        latest_release.download_url, username, token
     );
     let client = reqwest::Client::new();
     let mut response = client.get(url).send().await?;
-    let total_size = response.content_length().unwrap();
+    let total_size = response.content_length().unwrap_or(1);
     let mut downloaded: usize = 0;
     let mut file = File::options()
         .read(true)
         .write(true)
         .create(true)
-        .open(format!(
-            "{}/{}",
-            dir,
-            mod_.latest_release.as_ref().unwrap().file_name
-        ))?;
+        .open(format!("{}/{}", dir, latest_release.file_name))?;
+
+    file.lock_exclusive()?;
 
     while let Some(chunk) = response.chunk().await? {
         file.write_all(&chunk)?;
@@ -239,6 +248,8 @@ pub async fn download_mod<F: Fn(u16)>(
             f(downloaded_percent);
         }
     }
+
+    file.unlock()?;
 
     Ok(file)
 }

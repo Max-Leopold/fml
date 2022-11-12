@@ -15,7 +15,7 @@ use tui::text::{Spans, Text};
 use tui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
-use crate::factorio::api::Version;
+use crate::factorio::api::{Dependencies, Dependency, Version};
 use crate::factorio::installed_mods::InstalledMod;
 use crate::factorio::{api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
@@ -121,7 +121,7 @@ impl FML {
             Err(e) => {
                 log::error!("Error reading installed mods: {}", e);
                 vec![]
-            },
+            }
         };
         let installed_mods = installed_mods
             .into_iter()
@@ -410,47 +410,46 @@ impl FML {
                     Spans::from(format!("Downloads: {}", mod_.downloads_count)),
                     Spans::from("".to_string()),
                 ];
-                let dependencies = mod_.latest_release().info_json.dependencies.unwrap();
-                let required_dependencies = dependencies.required.iter().map(|d| {
-                    Spans::from(format!(
-                        "- {} {} {}",
-                        d.name,
-                        d.equality.as_ref().unwrap_or(&String::new()),
-                        d.version.as_ref().and_then(|v| Some(v.to_string())).unwrap_or("".to_string())
-                    ))
-                });
-                if required_dependencies.len() > 0 {
-                    text.push(Spans::from("Required Dependencies:"));
-                    text.extend(required_dependencies);
-                    text.push(Spans::from("".to_string()));
-                }
+                let latest_release = mod_.latest_release();
+                if let Some(latest_release) = latest_release {
+                    if let Some(dependencies) = latest_release.info_json.dependencies.as_ref() {
+                        let map_dependencies = |dependencies: &Vec<Dependency>| {
+                            dependencies
+                                .iter()
+                                .map(|d| {
+                                    Spans::from(format!(
+                                        "- {} {} {}",
+                                        d.name,
+                                        d.equality.as_ref().unwrap_or(&String::new()),
+                                        d.version
+                                            .as_ref()
+                                            .and_then(|v| Some(v.to_string()))
+                                            .unwrap_or("".to_string())
+                                    ))
+                                })
+                                .collect::<Vec<_>>()
+                        };
+                        let required_dependencies = map_dependencies(&dependencies.required);
+                        if required_dependencies.len() > 0 {
+                            text.push(Spans::from("Required Dependencies:"));
+                            text.extend(required_dependencies);
+                            text.push(Spans::from("".to_string()));
+                        }
 
-                let optional_dependencies = dependencies.optional.iter().map(|d| {
-                    Spans::from(format!(
-                        "- {} {} {}",
-                        d.name,
-                        d.equality.as_ref().unwrap_or(&String::new()),
-                        d.version.as_ref().and_then(|v| Some(v.to_string())).unwrap_or("".to_string())
-                    ))
-                });
-                if optional_dependencies.len() > 0 {
-                    text.push(Spans::from("Optional Dependencies:"));
-                    text.extend(optional_dependencies);
-                    text.push(Spans::from("".to_string()));
-                }
+                        let optional_dependencies = map_dependencies(&dependencies.optional);
+                        if optional_dependencies.len() > 0 {
+                            text.push(Spans::from("Optional Dependencies:"));
+                            text.extend(optional_dependencies);
+                            text.push(Spans::from("".to_string()));
+                        }
 
-                let incompatible_dependencies = dependencies.incompatible.iter().map(|d| {
-                    Spans::from(format!(
-                        "- {} {} {}",
-                        d.name,
-                        d.equality.as_ref().unwrap_or(&String::new()),
-                        d.version.as_ref().and_then(|v| Some(v.to_string())).unwrap_or("".to_string())
-                    ))
-                });
-                if incompatible_dependencies.len() > 0 {
-                    text.push(Spans::from("Incompatible Dependencies:"));
-                    text.extend(incompatible_dependencies);
-                    text.push(Spans::from("".to_string()));
+                        let incompatible_dependencies = map_dependencies(&dependencies.incompatible);
+                        if incompatible_dependencies.len() > 0 {
+                            text.push(Spans::from("Incompatible Dependencies:"));
+                            text.extend(incompatible_dependencies);
+                            text.push(Spans::from("".to_string()));
+                        }
+                    }
                 }
 
                 let description = mod_.description.unwrap_or("".to_string());

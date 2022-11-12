@@ -46,57 +46,59 @@ impl ModDownloader {
                         *currently_downloading_clone.lock().unwrap() = String::new();
                     }
                     maybe_download_request = download_request => {
-                      match maybe_download_request {
-                        Some(download_request) => {
-                            // The base mod is always a dependency but it's not actually a mod but instead the base game.
-                            // So we just skip it when asked to download because it's not available on the mod portal.
-                            if download_request.mod_name == "base" {
-                                continue;
-                            }
-                            let mod_ = api::get_mod(&download_request.mod_name).await.unwrap();
-                            *download_perc_clone.lock().unwrap() = 0;
-                            *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
+                        match maybe_download_request {
+                            Some(download_request) => {
+                                // The base mod is always a dependency but it's not actually a mod but instead the base game.
+                                // So we just skip it when asked to download because it's not available on the mod portal.
+                                if download_request.mod_name == "base" {
+                                    continue;
+                                }
+                                let mod_ = api::get_mod(&download_request.mod_name).await.unwrap();
+                                *download_perc_clone.lock().unwrap() = 0;
+                                *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
 
-                            let mut file = api::download_mod(
-                                &mod_,
-                                &download_request.username,
-                                &download_request.token,
-                                &download_request.mod_dir,
-                                Some(|x| {
-                                    *download_perc_clone.lock().unwrap() = x;
-                                }),
-                            )
-                            .await
-                            .unwrap();
-
-                            // Download all mod dependencies
-                            for dependency in mod_
-                                .latest_release()
-                                .info_json
-                                .dependencies
-                                .unwrap_or(Dependencies::default())
-                                .required
-                                .iter()
-                            {
-                                tx.send(ModDownloadRequest {
-                                    mod_name: dependency.name.clone(),
-                                    username: download_request.username.clone(),
-                                    token: download_request.token.clone(),
-                                    mod_dir: download_request.mod_dir.clone(),
-                                })
+                                let mut file = api::download_mod(
+                                    &mod_,
+                                    &download_request.username,
+                                    &download_request.token,
+                                    &download_request.mod_dir,
+                                    Some(|x| {
+                                        *download_perc_clone.lock().unwrap() = x;
+                                    }),
+                                )
+                                .await
                                 .unwrap();
-                            }
 
-                            install_mod_list
-                                .lock()
-                                .unwrap()
-                                .enable_mod(&download_request.mod_name);
-                            if let Ok(installed_mod) = installed_mods::parse_installed_mod(&mut file) {
-                                manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
+                                // Download all mod dependencies
+                                if let Some(release) = mod_.latest_release() {
+                                    for dependency in release
+                                        .info_json
+                                        .dependencies
+                                        .as_ref()
+                                        .unwrap_or(&Dependencies::default())
+                                        .required
+                                        .iter()
+                                    {
+                                        tx.send(ModDownloadRequest {
+                                            mod_name: dependency.name.clone(),
+                                            username: download_request.username.clone(),
+                                            token: download_request.token.clone(),
+                                            mod_dir: download_request.mod_dir.clone(),
+                                        })
+                                        .unwrap();
+                                    }
+                                }
+
+                                install_mod_list
+                                    .lock()
+                                    .unwrap()
+                                    .enable_mod(&download_request.mod_name);
+                                if let Ok(installed_mod) = installed_mods::parse_installed_mod(&mut file) {
+                                    manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
+                                }
                             }
+                            _ => {}
                         }
-                        _ => {}
-                      }
                     }
                 }
             }
