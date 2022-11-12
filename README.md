@@ -15,6 +15,9 @@ configure mods without having to copy files between machines.
 
 ## Getting Started
 
+You can find compiled binaries for every platform in the [release](https://github.com/Max-Leopold/fml/releases) section.
+Download the archive for your corresponding platform, unzip it and add the included binary to your `PATH`.
+
 ### Keyboard Shortcuts
 
 #### General
