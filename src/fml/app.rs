@@ -292,14 +292,28 @@ impl FML {
 
     fn draw_manage_list(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
         let items = self.manage_mod_list.lock().unwrap().items();
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("Mods")
+            .border_style(self.block_style(ActiveBlock::ManageModList));
+
+        if items.is_empty() {
+            let text = util::centered_text(
+                Text::raw("No mods installed"),
+                block.inner(rect).width.into(),
+                block.inner(rect).height.into(),
+                Some(true),
+            );
+            let text = Paragraph::new(text)
+                .block(block)
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            frame.render_widget(text, rect);
+            return;
+        }
 
         let list = EnabledList::with_items(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Mods")
-                    .border_style(self.block_style(ActiveBlock::ManageModList)),
-            )
+            .block(block)
             .highlight_style(Style::default().fg(Color::Yellow))
             .highlight_symbol(">> ")
             .installed_symbol("✔  ");
@@ -443,7 +457,8 @@ impl FML {
                             text.push(Spans::from("".to_string()));
                         }
 
-                        let incompatible_dependencies = map_dependencies(&dependencies.incompatible);
+                        let incompatible_dependencies =
+                            map_dependencies(&dependencies.incompatible);
                         if incompatible_dependencies.len() > 0 {
                             text.push(Spans::from("Incompatible Dependencies:"));
                             text.extend(incompatible_dependencies);
@@ -563,7 +578,6 @@ impl FML {
             .generate_mod_list()
             .save(&self.fml_config.mods_dir_path)
             .unwrap();
-        // todo!("Save installed mods to mod-list.json")
     }
 
     pub fn delete_mod(&self, mod_name: &str) {
