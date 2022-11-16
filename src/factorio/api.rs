@@ -2,7 +2,7 @@ use core::fmt;
 use fs2::FileExt;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::cmp::min;
+use std::cmp::{min, Ordering};
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
@@ -56,6 +56,8 @@ pub struct Release {
     pub file_name: String,
     #[serde(rename = "info_json")]
     pub info_json: InfoJson,
+    #[serde(deserialize_with = "deserialize_version")]
+    pub version: Version,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -80,7 +82,7 @@ pub struct Dependency {
     pub version: Option<Version>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Version {
     pub major: i64,
     pub minor: i64,
@@ -115,6 +117,14 @@ impl Version {
             patch,
         }
     }
+}
+
+fn deserialize_version<'de, D>(deserializer: D) -> Result<Version, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let version = String::deserialize(deserializer)?;
+    Ok(Version::from_str(&version))
 }
 
 fn deserialize_dependencies<'de, D>(deserializer: D) -> Result<Option<Dependencies>, D::Error>
@@ -191,6 +201,67 @@ impl Mod {
             },
         }
     }
+
+    pub async fn download_version<F: Fn(u16)>(
+        &mut self,
+        min_version: Option<&Version>,
+        max_version: Option<&Version>,
+        username: &str,
+        token: &str,
+        dir: &str,
+        f: Option<F>,
+    ) -> Result<File, Box<dyn Error>> {
+        self.load_fully().await?;
+
+        let release = self.find_release(min_version, max_version).await?;
+        if release.is_none() {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "No matching releases found",
+            )));
+        }
+
+        let release = release.unwrap();
+        let file = download_release(&release, username, token, dir, f).await?;
+
+        Ok(file)
+    }
+
+    pub async fn find_release(
+        &mut self,
+        min_version: Option<&Version>,
+        max_version: Option<&Version>,
+    ) -> Result<Option<Release>, Box<dyn Error>> {
+        self.load_fully().await?;
+
+        if self.releases.is_none() {
+            return Ok(None);
+        }
+
+        let mut releases = self.releases.as_ref().unwrap_or(&Vec::new()).clone();
+        releases.sort_by(|a, b| b.version.cmp(&a.version));
+
+        let mut latest_version = None;
+        for release in releases {
+            if max_version.is_some() && release.version > *max_version.unwrap() {
+                continue;
+            } else if min_version.is_some() && release.version < *min_version.unwrap() {
+                break;
+            } else {
+                latest_version = Some(release);
+                break;
+            }
+        }
+        Ok(latest_version)
+    }
+
+    async fn load_fully(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.full.unwrap_or(false) {
+            return Ok(());
+        }
+        _ = std::mem::replace(self, get_mod(&self.name).await?);
+        Ok(())
+    }
 }
 
 pub async fn get_mods(sort_by: Option<SortBy>) -> Result<Vec<Mod>, Box<dyn std::error::Error>> {
@@ -206,6 +277,43 @@ pub async fn get_mod(name: &str) -> Result<Mod, reqwest::Error> {
     let mut response = reqwest::get(url).await?.json::<Mod>().await?;
     response.full = Some(true);
     Ok(response)
+}
+
+pub async fn download_release<F: Fn(u16)>(
+    release: &Release,
+    username: &str,
+    token: &str,
+    dir: &str,
+    f: Option<F>,
+) -> Result<File, Box<dyn Error>> {
+    let url = format!(
+        "https://mods.factorio.com{}?username={}&token={}",
+        release.download_url, username, token
+    );
+    let client = reqwest::Client::new();
+    let mut response = client.get(url).send().await?;
+    let total_size = response.content_length().unwrap_or(1);
+    let mut downloaded: usize = 0;
+    let mut file = File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(format!("{}/{}", dir, release.file_name))?;
+
+    file.lock_exclusive()?;
+
+    while let Some(chunk) = response.chunk().await? {
+        file.write_all(&chunk)?;
+        downloaded = min(downloaded + (chunk.len() as usize), total_size as usize);
+        let downloaded_percent = ((downloaded as f64 / total_size as f64) * 100.0) as u16;
+        if let Some(ref f) = f {
+            f(downloaded_percent);
+        }
+    }
+
+    file.unlock()?;
+
+    Ok(file)
 }
 
 pub async fn download_mod<F: Fn(u16)>(
@@ -224,32 +332,5 @@ pub async fn download_mod<F: Fn(u16)>(
     }
 
     let latest_release = latest_release.unwrap();
-    let url = format!(
-        "https://mods.factorio.com{}?username={}&token={}",
-        latest_release.download_url, username, token
-    );
-    let client = reqwest::Client::new();
-    let mut response = client.get(url).send().await?;
-    let total_size = response.content_length().unwrap_or(1);
-    let mut downloaded: usize = 0;
-    let mut file = File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(format!("{}/{}", dir, latest_release.file_name))?;
-
-    file.lock_exclusive()?;
-
-    while let Some(chunk) = response.chunk().await? {
-        file.write_all(&chunk)?;
-        downloaded = min(downloaded + (chunk.len() as usize), total_size as usize);
-        let downloaded_percent = ((downloaded as f64 / total_size as f64) * 100.0) as u16;
-        if let Some(ref f) = f {
-            f(downloaded_percent);
-        }
-    }
-
-    file.unlock()?;
-
-    Ok(file)
+    download_release(&latest_release, username, token, dir, f).await
 }
