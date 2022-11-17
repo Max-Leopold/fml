@@ -78,8 +78,17 @@ pub struct Dependencies {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Dependency {
     pub name: String,
-    pub equality: Option<String>,
+    pub equality: Option<Equality>,
     pub version: Option<Version>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Equality {
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+    Equal,
 }
 
 #[derive(Default, Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,6 +96,58 @@ pub struct Version {
     pub major: i64,
     pub minor: i64,
     pub patch: i64,
+}
+
+impl Dependency {
+    pub fn get_max_and_min_version(&self) -> (Option<Version>, Option<Version>) {
+        if self.version.is_none() {
+            return (None, None);
+        }
+
+        match self.equality {
+            Some(Equality::GreaterThan) => {
+                let mut version = self.version.clone().unwrap();
+                version.patch += 1;
+                (Some(version), None)
+            }
+            Some(Equality::GreaterThanOrEqual) => (Some(self.version.clone().unwrap()), None),
+            Some(Equality::LessThan) => {
+                let mut version = self.version.clone().unwrap();
+                version.patch -= 1;
+                (None, Some(version))
+            }
+            Some(Equality::LessThanOrEqual) => (None, Some(self.version.clone().unwrap())),
+            Some(Equality::Equal) => (
+                Some(self.version.clone().unwrap()),
+                Some(self.version.clone().unwrap()),
+            ),
+            None => (None, None),
+        }
+    }
+}
+
+impl Equality {
+    pub fn from_str(s: &str) -> Option<Equality> {
+        match s {
+            ">" => Some(Equality::GreaterThan),
+            ">=" => Some(Equality::GreaterThanOrEqual),
+            "<" => Some(Equality::LessThan),
+            "<=" => Some(Equality::LessThanOrEqual),
+            "=" => Some(Equality::Equal),
+            _ => None,
+        }
+    }
+
+    pub fn to_str(e: Option<Equality>) -> &'static str {
+        match e {
+            Some(Equality::GreaterThan) => ">",
+            Some(Equality::GreaterThanOrEqual) => ">=",
+            Some(Equality::LessThan) => "<",
+            Some(Equality::LessThanOrEqual) => "<=",
+            Some(Equality::Equal) => "=",
+            None => "",
+        }
+    }
 }
 
 impl fmt::Display for Version {
@@ -156,7 +217,7 @@ where
         };
         let equality = captures.name("equality");
         let equality = match equality {
-            Some(equality) => Some(equality.as_str().trim().to_string()),
+            Some(equality) => Equality::from_str(equality.as_str().trim()),
             None => None,
         };
         let version = captures.name("version");

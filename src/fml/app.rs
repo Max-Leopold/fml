@@ -12,10 +12,10 @@ use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Alignment, Layout, Rect};
 use tui::style::{Color, Style};
 use tui::text::{Spans, Text};
-use tui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
+use tui::widgets::{Block, Borders, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
-use crate::factorio::api::{Dependencies, Dependency, Version};
+use crate::factorio::api::{Dependency, Equality};
 use crate::factorio::installed_mods::InstalledMod;
 use crate::factorio::{api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
@@ -434,7 +434,7 @@ impl FML {
                                     Spans::from(format!(
                                         "- {} {} {}",
                                         d.name,
-                                        d.equality.as_ref().unwrap_or(&String::new()),
+                                        Equality::to_str(d.equality.clone()),
                                         d.version
                                             .as_ref()
                                             .and_then(|v| Some(v.to_string()))
@@ -594,6 +594,8 @@ impl FML {
             .tx
             .send(ModDownloadRequest {
                 mod_name: mod_.mod_.name.clone(),
+                min_version: None,
+                max_version: None,
                 username: self.server_settings.username.clone(),
                 token: self.server_settings.token.clone(),
                 mod_dir: self.fml_config.mods_dir_path.clone(),

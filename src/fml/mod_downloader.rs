@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tui::widgets::Gauge;
 
-use crate::factorio::api::Dependencies;
+use crate::factorio::api::{Dependencies, Version};
 use crate::factorio::{api, installed_mods};
 
 use super::install_mod_list::InstallModList;
@@ -12,6 +12,8 @@ use super::manage_mod_list::{self, ManageModList};
 #[derive(Debug, Clone)]
 pub struct ModDownloadRequest {
     pub mod_name: String,
+    pub min_version: Option<Version>,
+    pub max_version: Option<Version>,
     pub username: String,
     pub token: String,
     pub mod_dir: String,
@@ -53,24 +55,23 @@ impl ModDownloader {
                                 if download_request.mod_name == "base" {
                                     continue;
                                 }
-                                let mod_ = api::get_mod(&download_request.mod_name).await.unwrap();
+                                let mut mod_ = api::get_mod(&download_request.mod_name).await.unwrap();
                                 *download_perc_clone.lock().unwrap() = 0;
                                 *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
 
-                                let mut file = api::download_mod(
-                                    &mod_,
+                                let mut file = mod_.download_version(
+                                    download_request.min_version.as_ref(),
+                                    download_request.max_version.as_ref(),
                                     &download_request.username,
                                     &download_request.token,
                                     &download_request.mod_dir,
                                     Some(|x| {
                                         *download_perc_clone.lock().unwrap() = x;
                                     }),
-                                )
-                                .await
-                                .unwrap();
+                                ).await.unwrap();
 
                                 // Download all mod dependencies
-                                if let Some(release) = mod_.latest_release() {
+                                if let Some(release) = mod_.find_release(download_request.min_version.as_ref(), download_request.max_version.as_ref()).await.unwrap() {
                                     for dependency in release
                                         .info_json
                                         .dependencies
@@ -79,8 +80,11 @@ impl ModDownloader {
                                         .required
                                         .iter()
                                     {
+                                        let (max_version, min_version) = dependency.get_max_and_min_version();
                                         tx.send(ModDownloadRequest {
                                             mod_name: dependency.name.clone(),
+                                            min_version,
+                                            max_version,
                                             username: download_request.username.clone(),
                                             token: download_request.token.clone(),
                                             mod_dir: download_request.mod_dir.clone(),
@@ -89,11 +93,11 @@ impl ModDownloader {
                                     }
                                 }
 
-                                install_mod_list
-                                    .lock()
-                                    .unwrap()
-                                    .enable_mod(&download_request.mod_name);
                                 if let Ok(installed_mod) = installed_mods::parse_installed_mod(&mut file) {
+                                    install_mod_list
+                                        .lock()
+                                        .unwrap()
+                                        .enable_mod(&download_request.mod_name);
                                     manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
                                 }
                             }
