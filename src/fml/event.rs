@@ -1,8 +1,8 @@
+use std::sync::mpsc;
 use std::time::Duration;
 
 use crossterm::event::KeyModifiers;
 use futures_util::StreamExt;
-use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
@@ -39,14 +39,14 @@ pub enum KeyCode {
 }
 
 pub struct Events {
-    rx: mpsc::UnboundedReceiver<Event<KeyCode>>,
-    pub tx: mpsc::UnboundedSender<Event<KeyCode>>,
+    rx: mpsc::Receiver<Event<KeyCode>>,
+    pub tx: mpsc::Sender<Event<KeyCode>>,
 }
 
 impl Events {
     pub fn with_config(config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel();
         let tx_ = tx.clone();
         let mut event_stream = crossterm::event::EventStream::new();
 
@@ -94,7 +94,7 @@ impl Events {
         Self { rx, tx: tx_ }
     }
 
-    pub fn next(&mut self) -> impl futures_util::Future<Output = Option<Event<KeyCode>>> + '_ {
+    pub fn next(&mut self) -> Result<Event<KeyCode>, mpsc::RecvError> {
         self.rx.recv()
     }
 }

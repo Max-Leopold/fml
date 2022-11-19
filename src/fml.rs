@@ -1,8 +1,9 @@
 pub mod app;
+pub mod event;
+pub mod handler;
+pub mod ui;
 pub mod widgets;
 
-mod event;
-mod handler;
 mod install_mod_list;
 mod manage_mod_list;
 mod markdown;

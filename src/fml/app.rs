@@ -15,7 +15,6 @@ use tui::text::{Spans, Text};
 use tui::widgets::{Block, Borders, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
-use crate::factorio::api::{Dependency, Equality};
 use crate::factorio::installed_mods::InstalledMod;
 use crate::factorio::{api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
@@ -25,9 +24,6 @@ use super::handler::handler;
 use super::install_mod_list::{InstallModItem, InstallModList};
 use super::manage_mod_list::ManageModList;
 use super::mod_downloader::{ModDownloadRequest, ModDownloader};
-use super::widgets::enabled_list::EnabledList;
-use super::widgets::loading::Loading;
-use super::{markdown, util};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Tab {
@@ -60,15 +56,15 @@ pub struct FML {
     pub server_settings: server_settings::ServerSettings,
     pub fml_config: FmlConfig,
     pub events: Events,
-    mod_downloader: ModDownloader,
+    pub mod_downloader: ModDownloader,
     navigation_history: Vec<Route>,
     pub ticks: u64,
-    should_quit: bool,
+    pub should_quit: bool,
     pub scroll_offset: u16,
 }
 
 impl FML {
-    pub async fn new(fml_config: FmlConfig) -> FML {
+    pub fn new(fml_config: FmlConfig) -> FML {
         let server_settings =
             server_settings::get_server_settings(&fml_config.server_config_path).unwrap();
 
@@ -93,12 +89,12 @@ impl FML {
                 .unwrap()
                 .set_items(mod_list_items, mod_list);
         });
-        let events = Events::with_config(None);
         let mod_downloader = ModDownloader::new(install_mod_list.clone(), manage_mod_list.clone());
         let ticks = 0;
         let should_quit = false;
         let navigation_history = vec![DEFAULT_ROUTE];
         let scroll_offset = 0;
+        let events = Events::with_config(None);
 
         FML {
             install_mod_list,
@@ -155,366 +151,11 @@ impl FML {
         }
     }
 
-    pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("Starting FML!");
-
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend)?;
-
-        self.run(&mut terminal).await?;
-
-        // restore terminal
-        disable_raw_mode()?;
-        execute!(
-            terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        )?;
-        terminal.show_cursor()?;
-
-        Ok(())
-    }
-
-    pub async fn run<B: Backend>(
-        &mut self,
-        terminal: &mut Terminal<B>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        loop {
-            if self.should_quit {
-                break;
-            }
-
-            terminal.draw(|frame| self.draw(frame))?;
-            if let Some(event) = self.next_event().await {
-                handler::handle(event, self);
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn quit_gracefully(&mut self) {
         self.should_quit = true;
     }
 
-    fn draw(&mut self, frame: &mut Frame<impl Backend>) {
-        let rect = frame.size();
-        let chunks = Layout::default()
-            .direction(tui::layout::Direction::Vertical)
-            .constraints(
-                [
-                    tui::layout::Constraint::Length(3),
-                    tui::layout::Constraint::Min(0),
-                ]
-                .as_ref(),
-            )
-            .split(rect);
-
-        self.draw_tabs(frame, chunks[0]);
-        match self.current_tab() {
-            Tab::Manage => self.draw_manage_tab(frame, chunks[1]),
-            Tab::Install => self.draw_install_tab(frame, chunks[1]),
-        }
-
-        if self.active_block() == ActiveBlock::QuitPopup {
-            let block = Block::default()
-                .title("Save Changes?")
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::Yellow));
-            let area = util::centered_rect(30, 6, frame.size());
-            let text = util::centered_text(
-                Text::raw("Save changes to mod-list.json? (y/n)"),
-                block.inner(area).width.into(),
-                block.inner(area).height.into(),
-                Some(true),
-            );
-            let popup = Paragraph::new(text)
-                .block(block)
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true });
-            frame.render_widget(tui::widgets::Clear, area);
-            frame.render_widget(popup, area);
-        }
-    }
-
-    fn draw_tabs(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
-        let tabs = vec!["Manage", "Install"];
-        let tabs = tabs
-            .iter()
-            .enumerate()
-            .map(|(_, t)| Spans::from(*t))
-            .collect();
-
-        let tabs = tui::widgets::Tabs::new(tabs)
-            .block(Block::default().borders(Borders::ALL).title("Tabs"))
-            .select(self.current_tab() as usize)
-            .style(Style::default().fg(Color::White))
-            .highlight_style(Style::default().fg(Color::Yellow));
-
-        let download_gauge = self.mod_downloader.generate_gauge();
-        let rect = match download_gauge {
-            Some(_) => {
-                let chunks = Layout::default()
-                    .direction(tui::layout::Direction::Horizontal)
-                    .constraints(
-                        [
-                            tui::layout::Constraint::Percentage(50),
-                            tui::layout::Constraint::Percentage(50),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(rect);
-
-                let download_gauge = download_gauge
-                    .unwrap()
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Download Progress"),
-                    )
-                    .gauge_style(Style::default().fg(Color::Green));
-
-                frame.render_widget(download_gauge, chunks[1]);
-                chunks[0]
-            }
-            None => rect,
-        };
-
-        frame.render_widget(tabs, rect);
-    }
-
-    fn draw_manage_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
-        self.draw_manage_list(frame, rect);
-    }
-
-    fn draw_manage_list(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
-        let items = self.manage_mod_list.lock().unwrap().items();
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title("Mods")
-            .border_style(self.block_style(ActiveBlock::ManageModList));
-
-        if items.is_empty() {
-            let text = util::centered_text(
-                Text::raw("No mods installed"),
-                block.inner(rect).width.into(),
-                block.inner(rect).height.into(),
-                Some(true),
-            );
-            let text = Paragraph::new(text)
-                .block(block)
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true });
-            frame.render_widget(text, rect);
-            return;
-        }
-
-        let list = EnabledList::with_items(items)
-            .block(block)
-            .highlight_style(Style::default().fg(Color::Yellow))
-            .highlight_symbol(">> ")
-            .installed_symbol("✔  ");
-
-        frame.render_stateful_widget(list, rect, &mut self.manage_mod_list.lock().unwrap().state);
-    }
-
-    fn draw_install_tab(&mut self, frame: &mut Frame<impl Backend>, rect: Rect) {
-        if !(self.install_mod_list.lock().unwrap().is_ready()) {
-            let loading = Loading::new()
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Mods")
-                        .border_style(self.block_style(ActiveBlock::InstallModList)),
-                )
-                .ticks(self.ticks)
-                .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
-            frame.render_widget(loading, rect);
-            return;
-        }
-
-        let chunks = Layout::default()
-            .direction(tui::layout::Direction::Vertical)
-            .constraints(
-                [
-                    tui::layout::Constraint::Length(3),
-                    tui::layout::Constraint::Min(0),
-                ]
-                .as_ref(),
-            )
-            .split(rect);
-
-        self.draw_search_bar(frame, chunks[0]);
-        self.draw_install_list(frame, chunks[1]);
-    }
-
-    fn draw_install_list(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let chunks = Layout::default()
-            .direction(tui::layout::Direction::Horizontal)
-            .constraints(
-                [
-                    tui::layout::Constraint::Percentage(50),
-                    tui::layout::Constraint::Percentage(50),
-                ]
-                .as_ref(),
-            )
-            .split(layout);
-        let items = self.install_mod_list.lock().unwrap().items();
-
-        let list = EnabledList::with_items(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Mods")
-                    .border_style(self.block_style(ActiveBlock::InstallModList)),
-            )
-            .highlight_style(Style::default().fg(Color::Yellow))
-            .highlight_symbol(">> ")
-            .installed_symbol("✔  ");
-
-        frame.render_stateful_widget(
-            list,
-            chunks[0],
-            &mut self.install_mod_list.lock().unwrap().state,
-        );
-
-        self.draw_mod_details(frame, chunks[1]);
-    }
-
-    fn draw_mod_details(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let selected_mod = self.install_mod_list.lock().unwrap().selected_mod();
-        if let Some(selected_mod) = selected_mod {
-            if !(selected_mod.lock().unwrap().loading) {
-                selected_mod.lock().unwrap().loading = true;
-                let selected_mod = selected_mod.clone();
-                let install_mod_list = self.install_mod_list.clone();
-                tokio::spawn(async move {
-                    let name = selected_mod.lock().unwrap().mod_.name.clone();
-                    // Small debounce so we don't spam the api
-                    tokio::time::sleep(Duration::from_millis(1000)).await;
-                    let new_selected_mod = install_mod_list.lock().unwrap().selected_mod();
-                    if let Some(new_selected_mod) = new_selected_mod {
-                        if new_selected_mod.lock().unwrap().mod_.name == name {
-                            // Load full mod information from api
-                            match api::get_mod(&name).await {
-                                Ok(mod_) => {
-                                    selected_mod.lock().unwrap().mod_ = mod_;
-                                }
-                                Err(err) => {
-                                    selected_mod.lock().unwrap().loading = false;
-                                    panic!("{}", err);
-                                }
-                            }
-                        } else {
-                            selected_mod.lock().unwrap().loading = false;
-                        }
-                    } else {
-                        selected_mod.lock().unwrap().loading = false;
-                    }
-                });
-            }
-
-            if selected_mod.lock().unwrap().mod_.full == Some(true) {
-                let mod_ = selected_mod.lock().unwrap().mod_.clone();
-                let mut text = vec![
-                    Spans::from(format!("Name: {}", mod_.title)),
-                    Spans::from(format!("Downloads: {}", mod_.downloads_count)),
-                    Spans::from("".to_string()),
-                ];
-                let latest_release = mod_.latest_release();
-                if let Some(latest_release) = latest_release {
-                    if let Some(dependencies) = latest_release.info_json.dependencies.as_ref() {
-                        let map_dependencies = |dependencies: &Vec<Dependency>| {
-                            dependencies
-                                .iter()
-                                .map(|d| {
-                                    Spans::from(format!(
-                                        "- {} {} {}",
-                                        d.name,
-                                        Equality::to_str(d.equality.clone()),
-                                        d.version
-                                            .as_ref()
-                                            .and_then(|v| Some(v.to_string()))
-                                            .unwrap_or("".to_string())
-                                    ))
-                                })
-                                .collect::<Vec<_>>()
-                        };
-                        let required_dependencies = map_dependencies(&dependencies.required);
-                        if required_dependencies.len() > 0 {
-                            text.push(Spans::from("Required Dependencies:"));
-                            text.extend(required_dependencies);
-                            text.push(Spans::from("".to_string()));
-                        }
-
-                        let optional_dependencies = map_dependencies(&dependencies.optional);
-                        if optional_dependencies.len() > 0 {
-                            text.push(Spans::from("Optional Dependencies:"));
-                            text.extend(optional_dependencies);
-                            text.push(Spans::from("".to_string()));
-                        }
-
-                        let incompatible_dependencies =
-                            map_dependencies(&dependencies.incompatible);
-                        if incompatible_dependencies.len() > 0 {
-                            text.push(Spans::from("Incompatible Dependencies:"));
-                            text.extend(incompatible_dependencies);
-                            text.push(Spans::from("".to_string()));
-                        }
-                    }
-                }
-
-                let description = mod_.description.unwrap_or("".to_string());
-                let mut desc = markdown::Parser::new(&description).to_spans();
-                text.append(&mut desc);
-                let text = Paragraph::new(text)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Mod Info")
-                            .border_style(self.block_style(ActiveBlock::InstallModDetails)),
-                    )
-                    .scroll((self.scroll_offset, 0))
-                    .wrap(Wrap { trim: true });
-                frame.render_widget(text, layout);
-            } else {
-                let loading = Loading::new()
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Mod Info")
-                            .border_style(self.block_style(ActiveBlock::InstallModDetails)),
-                    )
-                    .ticks(self.ticks)
-                    .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
-                frame.render_widget(loading, layout);
-            }
-        }
-    }
-
-    fn draw_search_bar(&mut self, frame: &mut Frame<impl Backend>, layout: Rect) {
-        let mut search_string = self.install_mod_list.lock().unwrap().filter.clone();
-        if self.active_block() == ActiveBlock::InstallSearch {
-            search_string += "█";
-        }
-        let search_bar = tui::widgets::Paragraph::new(search_string).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Search")
-                .border_style(self.block_style(ActiveBlock::InstallSearch)),
-        );
-
-        frame.render_widget(search_bar, layout);
-    }
-
-    async fn next_event(&mut self) -> Option<Event<KeyCode>> {
-        self.events.next().await
-    }
-
-    fn block_style(&self, block: ActiveBlock) -> Style {
+    pub fn block_style(&self, block: ActiveBlock) -> Style {
         if self.active_block() == block {
             default_active_block_style()
         } else {
