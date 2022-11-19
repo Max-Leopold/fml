@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct InstallModItem {
-    pub mod_: api::Mod,
-    pub loading: bool,
+    pub mod_identifier: api::ModIdentifier,
     pub download_info: DownloadInfo,
+    pub loading: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -26,9 +26,9 @@ pub struct InstallModList {
 }
 
 impl InstallModItem {
-    pub fn new(mod_: api::Mod) -> InstallModItem {
+    pub fn new(mod_identifier: api::ModIdentifier) -> InstallModItem {
         InstallModItem {
-            mod_,
+            mod_identifier,
             loading: false,
             download_info: DownloadInfo::default(),
         }
@@ -55,11 +55,12 @@ impl InstallModList {
         self.items
             .iter()
             .filter(|mod_item| {
-                let mod_ = &mod_item.lock().unwrap().mod_;
-                mod_.name
+                let mod_identifier = &mod_item.lock().unwrap().mod_identifier;
+                mod_identifier
+                    .name
                     .to_lowercase()
                     .contains(&self.filter.to_lowercase())
-                    || mod_
+                    || mod_identifier
                         .title
                         .to_lowercase()
                         .contains(&self.filter.to_lowercase())
@@ -124,7 +125,7 @@ impl InstallModList {
         let mod_ = self
             .items
             .iter()
-            .find(|mod_item| mod_item.lock().unwrap().mod_.name == mod_name);
+            .find(|mod_item| mod_item.lock().unwrap().mod_identifier.name == mod_name);
 
         if let Some(mod_) = mod_ {
             mod_.lock().unwrap().download_info.downloaded = false;
@@ -135,7 +136,7 @@ impl InstallModList {
         let mod_ = self
             .items
             .iter()
-            .find(|mod_item| mod_item.lock().unwrap().mod_.name == mod_name);
+            .find(|mod_item| mod_item.lock().unwrap().mod_identifier.name == mod_name);
 
         if let Some(mod_) = mod_ {
             mod_.lock().unwrap().download_info.downloaded = true;
@@ -151,7 +152,7 @@ impl InstallModList {
             .iter()
             .map(|item| {
                 let mod_item = &item.lock().unwrap();
-                EnabledListItem::new(mod_item.mod_.title.clone())
+                EnabledListItem::new(mod_item.mod_identifier.title.clone())
                     .enabled(mod_item.download_info.downloaded)
             })
             .collect()

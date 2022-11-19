@@ -78,109 +78,115 @@ fn draw_install_list(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
 fn draw_mod_details(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
     let selected_mod = fml.install_mod_list.lock().unwrap().selected_mod();
     if let Some(selected_mod) = selected_mod {
-        if !(selected_mod.lock().unwrap().loading) {
-            selected_mod.lock().unwrap().loading = true;
-            let selected_mod = selected_mod.clone();
-            let install_mod_list = fml.install_mod_list.clone();
-            tokio::spawn(async move {
-                let name = selected_mod.lock().unwrap().mod_.name.clone();
-                // Small debounce so we don't spam the api
-                tokio::time::sleep(Duration::from_millis(1000)).await;
-                let new_selected_mod = install_mod_list.lock().unwrap().selected_mod();
-                if let Some(new_selected_mod) = new_selected_mod {
-                    if new_selected_mod.lock().unwrap().mod_.name == name {
-                        // Load full mod information from api
-                        match api::get_mod(&name).await {
-                            Ok(mod_) => {
-                                selected_mod.lock().unwrap().mod_ = mod_;
-                            }
-                            Err(err) => {
-                                selected_mod.lock().unwrap().loading = false;
-                                panic!("{}", err);
+        let mod_ = api::REGISTRY
+            .lock()
+            .unwrap()
+            .get_mod(&selected_mod.lock().unwrap().mod_identifier);
+
+        match mod_ {
+            Some(mod_) => {
+                let mut text = vec![
+                    Spans::from(format!("Name: {}", mod_.title)),
+                    Spans::from(format!("Downloads: {}", mod_.downloads_count)),
+                    Spans::from("".to_string()),
+                ];
+                let latest_release = mod_.latest_release();
+                if let Some(latest_release) = latest_release {
+                    if let Some(dependencies) = latest_release.info_json.dependencies.as_ref() {
+                        let map_dependencies = |dependencies: &Vec<Dependency>| {
+                            dependencies
+                                .iter()
+                                .map(|d| {
+                                    Spans::from(format!(
+                                        "- {} {} {}",
+                                        d.name,
+                                        Equality::to_str(d.equality.clone()),
+                                        d.version
+                                            .as_ref()
+                                            .and_then(|v| Some(v.to_string()))
+                                            .unwrap_or("".to_string())
+                                    ))
+                                })
+                                .collect::<Vec<_>>()
+                        };
+                        let required_dependencies = map_dependencies(&dependencies.required);
+                        if required_dependencies.len() > 0 {
+                            text.push(Spans::from("Required Dependencies:"));
+                            text.extend(required_dependencies);
+                            text.push(Spans::from("".to_string()));
+                        }
+
+                        let optional_dependencies = map_dependencies(&dependencies.optional);
+                        if optional_dependencies.len() > 0 {
+                            text.push(Spans::from("Optional Dependencies:"));
+                            text.extend(optional_dependencies);
+                            text.push(Spans::from("".to_string()));
+                        }
+
+                        let incompatible_dependencies =
+                            map_dependencies(&dependencies.incompatible);
+                        if incompatible_dependencies.len() > 0 {
+                            text.push(Spans::from("Incompatible Dependencies:"));
+                            text.extend(incompatible_dependencies);
+                            text.push(Spans::from("".to_string()));
+                        }
+                    }
+                }
+
+                let description = mod_.description.unwrap_or("".to_string());
+                let mut desc = markdown::Parser::new(&description).to_spans();
+                text.append(&mut desc);
+                let text = Paragraph::new(text)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Mod Info")
+                            .border_style(fml.block_style(ActiveBlock::InstallModDetails)),
+                    )
+                    .scroll((fml.scroll_offset, 0))
+                    .wrap(Wrap { trim: true });
+                frame.render_widget(text, layout);
+            }
+            None => {
+                if !selected_mod.lock().unwrap().loading {
+                    selected_mod.lock().unwrap().loading = true;
+                    let selected_mod = selected_mod.clone();
+                    let install_mod_list = fml.install_mod_list.clone();
+                    tokio::spawn(async move {
+                        let old_mod_identifier =
+                            selected_mod.lock().unwrap().mod_identifier.clone();
+                        // Small debounce so we don't spam the api
+                        tokio::time::sleep(Duration::from_millis(1000)).await;
+                        let new_selected_mod = install_mod_list.lock().unwrap().selected_mod();
+                        if let Some(new_selected_mod) = new_selected_mod {
+                            if new_selected_mod.lock().unwrap().mod_identifier.name
+                                == old_mod_identifier.name
+                            {
+                                // Load full mod information from api
+                                let mod_ = api::Registry::load_mod(&old_mod_identifier).await;
+                                match mod_ {
+                                    Err(err) => {
+                                        log::error!("Couldn't load mod: {}", err)
+                                    }
+                                    _ => {}
+                                }
                             }
                         }
-                    } else {
                         selected_mod.lock().unwrap().loading = false;
-                    }
-                } else {
-                    selected_mod.lock().unwrap().loading = false;
+                    });
                 }
-            });
-        }
 
-        if selected_mod.lock().unwrap().mod_.full == Some(true) {
-            let mod_ = selected_mod.lock().unwrap().mod_.clone();
-            let mut text = vec![
-                Spans::from(format!("Name: {}", mod_.title)),
-                Spans::from(format!("Downloads: {}", mod_.downloads_count)),
-                Spans::from("".to_string()),
-            ];
-            let latest_release = mod_.latest_release();
-            if let Some(latest_release) = latest_release {
-                if let Some(dependencies) = latest_release.info_json.dependencies.as_ref() {
-                    let map_dependencies = |dependencies: &Vec<Dependency>| {
-                        dependencies
-                            .iter()
-                            .map(|d| {
-                                Spans::from(format!(
-                                    "- {} {} {}",
-                                    d.name,
-                                    Equality::to_str(d.equality.clone()),
-                                    d.version
-                                        .as_ref()
-                                        .and_then(|v| Some(v.to_string()))
-                                        .unwrap_or("".to_string())
-                                ))
-                            })
-                            .collect::<Vec<_>>()
-                    };
-                    let required_dependencies = map_dependencies(&dependencies.required);
-                    if required_dependencies.len() > 0 {
-                        text.push(Spans::from("Required Dependencies:"));
-                        text.extend(required_dependencies);
-                        text.push(Spans::from("".to_string()));
-                    }
-
-                    let optional_dependencies = map_dependencies(&dependencies.optional);
-                    if optional_dependencies.len() > 0 {
-                        text.push(Spans::from("Optional Dependencies:"));
-                        text.extend(optional_dependencies);
-                        text.push(Spans::from("".to_string()));
-                    }
-
-                    let incompatible_dependencies = map_dependencies(&dependencies.incompatible);
-                    if incompatible_dependencies.len() > 0 {
-                        text.push(Spans::from("Incompatible Dependencies:"));
-                        text.extend(incompatible_dependencies);
-                        text.push(Spans::from("".to_string()));
-                    }
-                }
+                let loading = Loading::new()
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Mod Info")
+                            .border_style(fml.block_style(ActiveBlock::InstallModDetails)),
+                    )
+                    .ticks(fml.ticks)
+                    .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
+                frame.render_widget(loading, layout);
             }
-
-            let description = mod_.description.unwrap_or("".to_string());
-            let mut desc = markdown::Parser::new(&description).to_spans();
-            text.append(&mut desc);
-            let text = Paragraph::new(text)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Mod Info")
-                        .border_style(fml.block_style(ActiveBlock::InstallModDetails)),
-                )
-                .scroll((fml.scroll_offset, 0))
-                .wrap(Wrap { trim: true });
-            frame.render_widget(text, layout);
-        } else {
-            let loading = Loading::new()
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("Mod Info")
-                        .border_style(fml.block_style(ActiveBlock::InstallModDetails)),
-                )
-                .ticks(fml.ticks)
-                .loading_symbols(vec!["Loading", "Loading.", "Loading..", "Loading..."]);
-            frame.render_widget(loading, layout);
         }
     }
 }

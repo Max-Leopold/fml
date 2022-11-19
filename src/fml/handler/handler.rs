@@ -1,5 +1,5 @@
 use crate::fml::app::{ActiveBlock, Tab, FML};
-use crate::fml::event::{Event, KeyCode};
+use crate::fml::event::KeyCode;
 
 use super::{install_mod_details, install_mod_list, install_search, manage_mod_list, quit_popup};
 

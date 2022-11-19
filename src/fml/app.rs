@@ -1,6 +1,6 @@
-use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::{error, io};
 
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
@@ -15,8 +15,9 @@ use tui::text::{Spans, Text};
 use tui::widgets::{Block, Borders, Paragraph, Wrap};
 use tui::{Frame, Terminal};
 
+use crate::factorio::api::Registry;
 use crate::factorio::installed_mods::InstalledMod;
-use crate::factorio::{api, installed_mods, mod_list, server_settings};
+use crate::factorio::{self, api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 
 use super::event::{Event, Events, KeyCode};
@@ -67,28 +68,8 @@ impl FML {
     pub fn new(fml_config: FmlConfig) -> FML {
         let server_settings =
             server_settings::get_server_settings(&fml_config.server_config_path).unwrap();
-
         let install_mod_list = Arc::new(Mutex::new(InstallModList::default()));
-        let install_mod_list_clone = install_mod_list.clone();
-        // in a seperate thread we will update the mod list
-        let mods_dir_path = fml_config.mods_dir_path.clone();
-        tokio::spawn(async move {
-            let mod_list = Self::generate_install_mod_list(&mods_dir_path).await;
-            install_mod_list_clone.lock().unwrap().set_items(mod_list);
-        });
-
         let manage_mod_list = Arc::new(Mutex::new(ManageModList::default()));
-        let manage_mod_list_clone = manage_mod_list.clone();
-        // in a seperate thread we will update the mod list
-        let mods_dir_path = fml_config.mods_dir_path.clone();
-        tokio::spawn(async move {
-            let mod_list_items = Self::generate_manage_mod_list(&mods_dir_path);
-            let mod_list = mod_list::ModList::load_or_create(&mods_dir_path).unwrap();
-            manage_mod_list_clone
-                .lock()
-                .unwrap()
-                .set_items(mod_list_items, mod_list);
-        });
         let mod_downloader = ModDownloader::new(install_mod_list.clone(), manage_mod_list.clone());
         let ticks = 0;
         let should_quit = false;
@@ -96,7 +77,7 @@ impl FML {
         let scroll_offset = 0;
         let events = Events::with_config(None);
 
-        FML {
+        let fml = FML {
             install_mod_list,
             manage_mod_list,
             server_settings,
@@ -107,48 +88,76 @@ impl FML {
             ticks,
             should_quit,
             scroll_offset,
-        }
-    }
-
-    async fn generate_install_mod_list(mods_dir: &str) -> Vec<InstallModItem> {
-        let mods = api::get_mods(None).await.ok().unwrap();
-        let installed_mods = match installed_mods::read_installed_mods(mods_dir) {
-            Ok(mods) => mods,
-            Err(e) => {
-                log::error!("Error reading installed mods: {}", e);
-                vec![]
-            }
         };
-        let installed_mods = installed_mods
-            .into_iter()
-            .map(|mod_| (mod_.name.clone(), mod_))
-            .collect::<std::collections::HashMap<String, installed_mods::InstalledMod>>();
-        let mod_list_items = mods
-            .into_iter()
-            .map(|mod_| {
-                let mut mod_item = InstallModItem::new(mod_);
-                if installed_mods.contains_key(&mod_item.mod_.name) {
-                    mod_item.download_info.downloaded = true;
-                    mod_item.download_info.versions = installed_mods
-                        .get(&mod_item.mod_.name)
-                        .unwrap()
-                        .version
-                        .clone();
-                }
-                mod_item
-            })
-            .collect();
-        mod_list_items
+
+        fml.async_init();
+
+        return fml;
     }
 
-    fn generate_manage_mod_list(mods_dir: &str) -> Vec<InstalledMod> {
-        match installed_mods::read_installed_mods(mods_dir) {
-            Ok(mods) => mods,
-            Err(e) => {
-                log::error!("Error reading installed mods: {}", e);
-                vec![]
+    fn async_init(&self) {
+        let mods_dir_path = self.fml_config.mods_dir_path.clone();
+        let install_mod_list = self.install_mod_list.clone();
+        tokio::spawn(async move {
+            // Load mod identifiers in registry
+            let mod_identifiers = api::Registry::load_mod_identifiers().await;
+            match mod_identifiers {
+                Ok(mod_identifiers) => {
+                    let installed_mods = match installed_mods::read_installed_mods(&mods_dir_path) {
+                        Ok(mods) => mods,
+                        Err(e) => {
+                            log::error!("Error reading installed mods: {}", e);
+                            vec![]
+                        }
+                    };
+                    let installed_mods = installed_mods
+                        .into_iter()
+                        .map(|mod_| (mod_.name.clone(), mod_))
+                        .collect::<std::collections::HashMap<String, installed_mods::InstalledMod>>(
+                        );
+
+                    match api::REGISTRY.lock().unwrap().get_mod_identifiers() {
+                        Some(mod_identifiers) => {
+                            let mod_list_items = mod_identifiers
+                                .into_iter()
+                                .map(|mod_identifier| {
+                                    let mut mod_item = InstallModItem::new(mod_identifier.clone());
+                                    if installed_mods.contains_key(&mod_item.mod_identifier.name) {
+                                        mod_item.download_info.downloaded = true;
+                                    }
+                                    mod_item
+                                })
+                                .collect();
+
+                            install_mod_list.lock().unwrap().set_items(mod_list_items);
+                        }
+                        _ => {}
+                    }
+                }
+                Err(e) => {
+                    // We should retry loading the mod identifiers and not just give up
+                    log::error!("Failed to load mod identifiers: {}", e);
+                }
             }
-        }
+        });
+
+        let mods_dir_path = self.fml_config.mods_dir_path.clone();
+        let manage_mod_list = self.manage_mod_list.clone();
+        tokio::spawn(async move {
+            let installed_mods = match installed_mods::read_installed_mods(&mods_dir_path) {
+                Ok(mods) => mods,
+                Err(e) => {
+                    log::error!("Error reading installed mods: {}", e);
+                    vec![]
+                }
+            };
+
+            let mod_list = mod_list::ModList::load_or_create(&mods_dir_path).unwrap();
+            manage_mod_list
+                .lock()
+                .unwrap()
+                .set_items(installed_mods, mod_list);
+        });
     }
 
     pub fn quit_gracefully(&mut self) {
@@ -199,7 +208,9 @@ impl FML {
     }
 
     pub fn undo_navigation(&mut self) {
-        self.navigation_history.pop();
+        if self.navigation_history.len() > 1 {
+            self.navigation_history.pop();
+        }
     }
 
     pub fn scroll_up(&mut self) {
@@ -234,7 +245,7 @@ impl FML {
         self.mod_downloader
             .tx
             .send(ModDownloadRequest {
-                mod_name: mod_.mod_.name.clone(),
+                mod_name: mod_.mod_identifier.name.clone(),
                 min_version: None,
                 max_version: None,
                 username: self.server_settings.username.clone(),

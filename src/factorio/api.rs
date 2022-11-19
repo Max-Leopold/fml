@@ -3,13 +3,98 @@ use fs2::FileExt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::cmp::{min, Ordering};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use crate::skip_none;
+
+#[derive(Default)]
+pub struct Registry {
+    all_mod_identifiers: Option<Vec<ModIdentifier>>,
+    mods: HashMap<ModIdentifier, Mod>,
+}
+
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+pub struct ModIdentifier {
+    pub name: String,
+    pub title: String,
+}
+
+lazy_static! {
+    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
+}
+
+impl Registry {
+    pub async fn load_mod_identifiers() -> Result<Vec<ModIdentifier>, Box<dyn std::error::Error>> {
+        if let Some(all_mod_identifiers) = REGISTRY.lock().unwrap().get_mod_identifiers() {
+            return Ok(all_mod_identifiers);
+        }
+
+        let url = "https://mods.factorio.com/api/mods?page_size=max";
+        let mut mods = reqwest::get(url).await?.json::<Mods>().await?.results;
+        mods.sort_by(|a, b| b.downloads_count.cmp(&a.downloads_count));
+        let mod_identifier: Vec<ModIdentifier> = mods
+            .iter()
+            .map(|m| ModIdentifier {
+                name: m.name.clone(),
+                title: m.title.clone(),
+            })
+            .collect();
+
+        REGISTRY
+            .lock()
+            .unwrap()
+            .set_mod_identifiers(mod_identifier.clone());
+
+        Ok(mod_identifier)
+    }
+
+    fn set_mod_identifiers(&mut self, mod_identifiers: Vec<ModIdentifier>) {
+        self.all_mod_identifiers = Some(mod_identifiers);
+    }
+
+    pub fn get_mod_identifiers(&self) -> Option<Vec<ModIdentifier>> {
+        self.all_mod_identifiers.clone()
+    }
+
+    pub async fn load_mod(
+        mod_identifier: &ModIdentifier,
+    ) -> Result<Mod, Box<dyn std::error::Error>> {
+        if let Some(mod_) = REGISTRY.lock().unwrap().mods.get(mod_identifier) {
+            return Ok(mod_.clone());
+        }
+        let url = format!(
+            "https://mods.factorio.com/api/mods/{}/full",
+            mod_identifier.name
+        );
+        let mod_ = reqwest::get(url).await?.json::<Mod>().await?;
+        REGISTRY.lock().unwrap().add_mod(mod_.clone());
+        Ok(mod_)
+    }
+
+    fn add_mod(&mut self, mod_: Mod) {
+        self.mods.insert(
+            ModIdentifier {
+                name: mod_.name.clone(),
+                title: mod_.title.clone(),
+            },
+            mod_,
+        );
+    }
+
+    pub fn get_mod(&self, mod_identifier: &ModIdentifier) -> Option<Mod> {
+        if self.mods.contains_key(mod_identifier) {
+            return Some(self.mods.get(mod_identifier).unwrap().clone());
+        }
+
+        None
+    }
+}
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,7 +129,6 @@ pub struct Mod {
     #[serde(rename = "latest_release")]
     pub latest_release: Option<Release>,
     pub releases: Option<Vec<Release>>,
-    pub full: Option<bool>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -272,8 +356,6 @@ impl Mod {
         dir: &str,
         f: Option<F>,
     ) -> Result<File, Box<dyn Error>> {
-        self.load_fully().await?;
-
         let release = self.find_release(min_version, max_version).await?;
         if release.is_none() {
             return Err(Box::new(std::io::Error::new(
@@ -293,8 +375,6 @@ impl Mod {
         min_version: Option<&Version>,
         max_version: Option<&Version>,
     ) -> Result<Option<Release>, Box<dyn Error>> {
-        self.load_fully().await?;
-
         if self.releases.is_none() {
             return Ok(None);
         }
@@ -315,29 +395,6 @@ impl Mod {
         }
         Ok(latest_version)
     }
-
-    async fn load_fully(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.full.unwrap_or(false) {
-            return Ok(());
-        }
-        _ = std::mem::replace(self, get_mod(&self.name).await?);
-        Ok(())
-    }
-}
-
-pub async fn get_mods(sort_by: Option<SortBy>) -> Result<Vec<Mod>, Box<dyn std::error::Error>> {
-    let url = "https://mods.factorio.com/api/mods?page_size=max";
-    let mut mods = reqwest::get(url).await?.json::<Mods>().await?;
-    let sort_by = sort_by.unwrap_or(SortBy::Downloads);
-    mods.sort(sort_by);
-    Ok(mods.results)
-}
-
-pub async fn get_mod(name: &str) -> Result<Mod, reqwest::Error> {
-    let url = format!("https://mods.factorio.com/api/mods/{}/full", name);
-    let mut response = reqwest::get(url).await?.json::<Mod>().await?;
-    response.full = Some(true);
-    Ok(response)
 }
 
 pub async fn download_release<F: Fn(u16)>(

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tui::widgets::Gauge;
 
-use crate::factorio::api::{Dependencies, Version};
+use crate::factorio::api::{Dependencies, ModIdentifier, Version};
 use crate::factorio::{api, installed_mods};
 
 use super::install_mod_list::InstallModList;
@@ -55,7 +55,10 @@ impl ModDownloader {
                                 if download_request.mod_name == "base" {
                                     continue;
                                 }
-                                let mut mod_ = api::get_mod(&download_request.mod_name).await.unwrap();
+                                let mut mod_ = api::Registry::load_mod(&ModIdentifier {
+                                    name: download_request.mod_name,
+                                    title: String::new(),
+                                }).await.unwrap();
                                 *download_perc_clone.lock().unwrap() = 0;
                                 *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
 
@@ -97,7 +100,7 @@ impl ModDownloader {
                                     install_mod_list
                                         .lock()
                                         .unwrap()
-                                        .enable_mod(&download_request.mod_name);
+                                        .enable_mod(&installed_mod.name);
                                     manage_mod_list.lock().unwrap().add_mod(installed_mod, true);
                                 }
                             }

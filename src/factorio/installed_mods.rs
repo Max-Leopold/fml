@@ -6,19 +6,15 @@ use std::io::Seek;
 use std::io::SeekFrom;
 
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::OneOrMany;
 
 use crate::skip_err;
 use crate::skip_none;
 
-#[serde_as]
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstalledMod {
     pub name: String,
-    #[serde_as(deserialize_as = "OneOrMany<_>")]
-    pub version: Vec<String>,
+    pub version: String,
     #[serde(rename = "factorio_version")]
     pub factorio_version: String,
     pub title: String,
@@ -62,18 +58,7 @@ pub fn read_installed_mods(
         if let Ok(mut mod_file) = std::fs::File::open(potential_mod_file.path()) {
             let installed_mod = skip_err!(parse_installed_mod(&mut mod_file));
 
-            let duplicate = installed_mods
-                .iter_mut()
-                .find(|m| installed_mod.name == m.name);
-
-            if duplicate.is_some() {
-                duplicate
-                    .unwrap()
-                    .version
-                    .push(installed_mod.version.first().unwrap().to_string());
-            } else {
-                installed_mods.push(installed_mod);
-            }
+            installed_mods.push(installed_mod);
         }
     }
     installed_mods.sort_by(|a, b| a.title.cmp(&b.title));
