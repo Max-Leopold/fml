@@ -2,7 +2,7 @@ use core::fmt;
 use fs2::FileExt;
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::cmp::{min, Ordering};
+use std::cmp::min;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
@@ -19,14 +19,10 @@ pub struct Registry {
     mods: HashMap<ModIdentifier, Mod>,
 }
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
-pub struct ModIdentifier {
-    pub name: String,
-    pub title: String,
-}
-
 lazy_static! {
     pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
+    // See https://wiki.factorio.com/Tutorial:Mod_structure#dependencies for the dependency string format
+    static ref DEPDENDECY_REGEX: Regex = Regex::new(r"^(?P<prefix>[!?~()]*)\s*(?P<mod_name>\S[^>=<]+)\s*(?P<equality>[=<>]+)?\s*(?P<version>\S+)?\s*$").unwrap();
 }
 
 impl Registry {
@@ -36,22 +32,15 @@ impl Registry {
         }
 
         let url = "https://mods.factorio.com/api/mods?page_size=max";
-        let mut mods = reqwest::get(url).await?.json::<Mods>().await?.results;
-        mods.sort_by(|a, b| b.downloads_count.cmp(&a.downloads_count));
-        let mod_identifier: Vec<ModIdentifier> = mods
-            .iter()
-            .map(|m| ModIdentifier {
-                name: m.name.clone(),
-                title: m.title.clone(),
-            })
-            .collect();
+        let mut mod_identifiers = reqwest::get(url).await?.json::<ModIdentifiers>().await?.results;
+        mod_identifiers.sort_by(|a, b| b.downloads_count.cmp(&a.downloads_count));
 
         REGISTRY
             .lock()
             .unwrap()
-            .set_mod_identifiers(mod_identifier.clone());
+            .set_mod_identifiers(mod_identifiers.clone());
 
-        Ok(mod_identifier)
+        Ok(mod_identifiers)
     }
 
     fn set_mod_identifiers(&mut self, mod_identifiers: Vec<ModIdentifier>) {
@@ -82,6 +71,7 @@ impl Registry {
             ModIdentifier {
                 name: mod_.name.clone(),
                 title: mod_.title.clone(),
+                downloads_count: mod_.downloads_count,
             },
             mod_,
         );
@@ -97,23 +87,22 @@ impl Registry {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct ModIdentifiers {
+    results: Vec<ModIdentifier>,
+}
+
+#[derive(Debug, Default, Eq, Hash, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ModIdentifier {
+    pub name: String,
+    pub title: String,
+    #[serde(rename = "downloads_count")]
+    downloads_count: i64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Mods {
-    pub results: Vec<Mod>,
-}
-
-pub enum SortBy {
-    Downloads,
-}
-
-impl Mods {
-    pub fn sort(&mut self, sort_by: SortBy) {
-        match sort_by {
-            SortBy::Downloads => self
-                .results
-                .sort_by(|a, b| b.downloads_count.cmp(&a.downloads_count)),
-        }
-    }
+    results: Vec<Mod>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -122,13 +111,10 @@ pub struct Mod {
     pub name: String,
     pub title: String,
     pub summary: String,
-    pub description: Option<String>,
+    pub description: String,
     #[serde(rename = "downloads_count")]
     pub downloads_count: i64,
-    pub category: Option<String>,
-    #[serde(rename = "latest_release")]
-    pub latest_release: Option<Release>,
-    pub releases: Option<Vec<Release>>,
+    pub releases: Vec<Release>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -180,6 +166,15 @@ pub struct Version {
     pub major: i64,
     pub minor: i64,
     pub patch: i64,
+}
+
+impl ModIdentifier {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            ..Default::default()
+        }
+    }
 }
 
 impl Dependency {
@@ -286,11 +281,7 @@ where
     let mut optional_dependencies = Vec::new();
     let mut incompatible_dependencies = Vec::new();
     for dependency in dependencies {
-        // See https://wiki.factorio.com/Tutorial:Mod_structure#dependencies for the dependency string format
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"^(?P<prefix>[!?~()]*)\s*(?P<mod_name>\S[^>=<]+)\s*(?P<equality>[=<>]+)?\s*(?P<version>\S+)?\s*$").unwrap();
-        }
-        let captures = skip_none!(RE.captures(&dependency));
+        let captures = skip_none!(DEPDENDECY_REGEX.captures(&dependency));
         let mod_name = skip_none!(captures.name("mod_name"));
         let mod_name = mod_name.as_str().trim();
 
@@ -337,14 +328,9 @@ where
 }
 
 impl Mod {
-    pub fn latest_release(&self) -> Option<Release> {
-        match self.latest_release {
-            Some(ref latest_release) => Some(latest_release.clone()),
-            None => match self.releases {
-                Some(ref releases) => releases.first().cloned(),
-                None => None,
-            },
-        }
+    pub fn latest_release(&mut self) -> Option<Release> {
+        self.releases.sort_by(|a, b| b.version.cmp(&a.version));
+        self.releases.first().cloned()
     }
 
     pub async fn download_version<F: Fn(u16)>(
@@ -375,15 +361,10 @@ impl Mod {
         min_version: Option<&Version>,
         max_version: Option<&Version>,
     ) -> Result<Option<Release>, Box<dyn Error>> {
-        if self.releases.is_none() {
-            return Ok(None);
-        }
-
-        let mut releases = self.releases.as_ref().unwrap_or(&Vec::new()).clone();
-        releases.sort_by(|a, b| b.version.cmp(&a.version));
+        self.releases.sort_by(|a, b| b.version.cmp(&a.version));
 
         let mut latest_version = None;
-        for release in releases {
+        for release in &self.releases {
             if max_version.is_some() && release.version > *max_version.unwrap() {
                 continue;
             } else if min_version.is_some() && release.version < *min_version.unwrap() {
@@ -393,7 +374,7 @@ impl Mod {
                 break;
             }
         }
-        Ok(latest_version)
+        Ok(latest_version.cloned())
     }
 }
 
@@ -432,23 +413,4 @@ pub async fn download_release<F: Fn(u16)>(
     file.unlock()?;
 
     Ok(file)
-}
-
-pub async fn download_mod<F: Fn(u16)>(
-    mod_: &Mod,
-    username: &str,
-    token: &str,
-    dir: &str,
-    f: Option<F>,
-) -> Result<File, Box<dyn Error>> {
-    let latest_release = mod_.latest_release();
-    if latest_release.is_none() {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "No releases found",
-        )));
-    }
-
-    let latest_release = latest_release.unwrap();
-    download_release(&latest_release, username, token, dir, f).await
 }

@@ -1,27 +1,10 @@
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use std::{error, io};
 
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::execute;
-use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-};
-use log::info;
-use tui::backend::{Backend, CrosstermBackend};
-use tui::layout::{Alignment, Layout, Rect};
-use tui::style::{Color, Style};
-use tui::text::{Spans, Text};
-use tui::widgets::{Block, Borders, Paragraph, Wrap};
-use tui::{Frame, Terminal};
-
-use crate::factorio::api::Registry;
-use crate::factorio::installed_mods::InstalledMod;
-use crate::factorio::{self, api, installed_mods, mod_list, server_settings};
+use crate::factorio::{api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
+use tui::style::{Color, Style};
 
-use super::event::{Event, Events, KeyCode};
-use super::handler::handler;
+use super::event::Events;
 use super::install_mod_list::{InstallModItem, InstallModList};
 use super::manage_mod_list::ManageModList;
 use super::mod_downloader::{ModDownloadRequest, ModDownloader};
@@ -116,23 +99,18 @@ impl FML {
                         .collect::<std::collections::HashMap<String, installed_mods::InstalledMod>>(
                         );
 
-                    match api::REGISTRY.lock().unwrap().get_mod_identifiers() {
-                        Some(mod_identifiers) => {
-                            let mod_list_items = mod_identifiers
-                                .into_iter()
-                                .map(|mod_identifier| {
-                                    let mut mod_item = InstallModItem::new(mod_identifier.clone());
-                                    if installed_mods.contains_key(&mod_item.mod_identifier.name) {
-                                        mod_item.download_info.downloaded = true;
-                                    }
-                                    mod_item
-                                })
-                                .collect();
+                    let mod_list_items = mod_identifiers
+                        .into_iter()
+                        .map(|mod_identifier| {
+                            let mut mod_item = InstallModItem::new(mod_identifier.clone());
+                            if installed_mods.contains_key(&mod_item.mod_identifier.name) {
+                                mod_item.download_info.downloaded = true;
+                            }
+                            mod_item
+                        })
+                        .collect();
 
-                            install_mod_list.lock().unwrap().set_items(mod_list_items);
-                        }
-                        _ => {}
-                    }
+                    install_mod_list.lock().unwrap().set_items(mod_list_items);
                 }
                 Err(e) => {
                     // We should retry loading the mod identifiers and not just give up

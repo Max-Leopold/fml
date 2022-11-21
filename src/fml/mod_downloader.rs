@@ -7,7 +7,7 @@ use crate::factorio::api::{Dependencies, ModIdentifier, Version};
 use crate::factorio::{api, installed_mods};
 
 use super::install_mod_list::InstallModList;
-use super::manage_mod_list::{self, ManageModList};
+use super::manage_mod_list::ManageModList;
 
 #[derive(Debug, Clone)]
 pub struct ModDownloadRequest {
@@ -55,10 +55,7 @@ impl ModDownloader {
                                 if download_request.mod_name == "base" {
                                     continue;
                                 }
-                                let mut mod_ = api::Registry::load_mod(&ModIdentifier {
-                                    name: download_request.mod_name,
-                                    title: String::new(),
-                                }).await.unwrap();
+                                let mut mod_ = api::Registry::load_mod(&ModIdentifier::new(download_request.mod_name)).await.unwrap();
                                 *download_perc_clone.lock().unwrap() = 0;
                                 *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
 

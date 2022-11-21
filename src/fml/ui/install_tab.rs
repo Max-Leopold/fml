@@ -84,7 +84,7 @@ fn draw_mod_details(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
             .get_mod(&selected_mod.lock().unwrap().mod_identifier);
 
         match mod_ {
-            Some(mod_) => {
+            Some(mut mod_) => {
                 let mut text = vec![
                     Spans::from(format!("Name: {}", mod_.title)),
                     Spans::from(format!("Downloads: {}", mod_.downloads_count)),
@@ -133,8 +133,7 @@ fn draw_mod_details(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
                     }
                 }
 
-                let description = mod_.description.unwrap_or("".to_string());
-                let mut desc = markdown::Parser::new(&description).to_spans();
+                let mut desc = markdown::Parser::new(&mod_.description).to_spans();
                 text.append(&mut desc);
                 let text = Paragraph::new(text)
                     .block(
