@@ -32,7 +32,11 @@ impl Registry {
         }
 
         let url = "https://mods.factorio.com/api/mods?page_size=max";
-        let mut mod_identifiers = reqwest::get(url).await?.json::<ModIdentifiers>().await?.results;
+        let mut mod_identifiers = reqwest::get(url)
+            .await?
+            .json::<ModIdentifiers>()
+            .await?
+            .results;
         mod_identifiers.sort_by(|a, b| b.downloads_count.cmp(&a.downloads_count));
 
         REGISTRY

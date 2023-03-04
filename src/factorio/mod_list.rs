@@ -47,9 +47,7 @@ impl ModList {
                 .into_iter()
                 .map(|mod_entry| (mod_entry.name.clone(), mod_entry))
                 .collect();
-            let config = ModList {
-                mods: map,
-            };
+            let config = ModList { mods: map };
             return Ok(config);
         } else {
             let config = ModList::new();
