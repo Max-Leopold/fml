@@ -28,3 +28,5 @@ toml = "0.7.2"
 clap = { version = "4.1.8", features = ["derive"] }
 unicode-width = "0.1.10"
 futures-util = "0.3.26"
+futures = "0.3.26"
+semver = { version = "1.0.17", features = ["serde"] }
