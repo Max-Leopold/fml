@@ -1,1 +1,11 @@
 /target
+
+*.DS_Store
+
+/mods
+/config
+
+dev.log
+fml.json
+mod-list.json
+server-settings.json
