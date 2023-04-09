@@ -1,11 +1,12 @@
 use crate::factorio::api;
+use crate::factorio::api::registry::ModIdentifier;
 
 use super::widgets::enabled_list::{EnabledListItem, ListState};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct InstallModItem {
-    pub mod_identifier: api::ModIdentifier,
+    pub mod_identifier: ModIdentifier,
     pub download_info: DownloadInfo,
     pub loading: bool,
 }
@@ -26,7 +27,7 @@ pub struct InstallModList {
 }
 
 impl InstallModItem {
-    pub fn new(mod_identifier: api::ModIdentifier) -> InstallModItem {
+    pub fn new(mod_identifier: ModIdentifier) -> InstallModItem {
         InstallModItem {
             mod_identifier,
             loading: false,

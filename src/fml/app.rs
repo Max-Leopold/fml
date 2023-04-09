@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::factorio::{api, installed_mods, mod_list, server_settings};
+use crate::factorio::{self, api, installed_mods, mod_list, server_settings};
 use crate::fml_config::FmlConfig;
 use tui::style::{Color, Style};
 
@@ -83,7 +83,7 @@ impl FML {
         let install_mod_list = self.install_mod_list.clone();
         tokio::spawn(async move {
             // Load mod identifiers in registry
-            let mod_identifiers = api::Registry::load_mod_identifiers().await;
+            let mod_identifiers = factorio::api::registry::Registry::mod_identifiers().await;
             match mod_identifiers {
                 Ok(mod_identifiers) => {
                     let installed_mods = match installed_mods::read_installed_mods(&mods_dir_path) {
@@ -224,8 +224,7 @@ impl FML {
             .tx
             .send(ModDownloadRequest {
                 mod_name: mod_.mod_identifier.name.clone(),
-                min_version: None,
-                max_version: None,
+                ver_req: semver::VersionReq::parse("*").unwrap(),
                 username: self.server_settings.username.clone(),
                 token: self.server_settings.token.clone(),
                 mod_dir: self.fml_config.mods_dir_path.clone(),

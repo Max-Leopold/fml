@@ -6,7 +6,8 @@ use tui::text::Spans;
 use tui::widgets::{Block, Borders, Paragraph, Wrap};
 use tui::Frame;
 
-use crate::factorio::api::{self, Dependency, Equality};
+use crate::factorio;
+use crate::factorio::modification::Dependency;
 use crate::fml::app::{ActiveBlock, FML};
 use crate::fml::markdown;
 use crate::fml::widgets::enabled_list::EnabledList;
@@ -78,10 +79,9 @@ fn draw_install_list(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
 fn draw_mod_details(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
     let selected_mod = fml.install_mod_list.lock().unwrap().selected_mod();
     if let Some(selected_mod) = selected_mod {
-        let mod_ = api::REGISTRY
-            .lock()
-            .unwrap()
-            .get_mod(&selected_mod.lock().unwrap().mod_identifier);
+        let mod_ = factorio::api::registry::Registry::get_mod(
+            &selected_mod.lock().unwrap().mod_identifier.name,
+        );
 
         match mod_ {
             Some(mut mod_) => {
@@ -92,44 +92,34 @@ fn draw_mod_details(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
                 ];
                 let latest_release = mod_.latest_release();
                 if let Some(latest_release) = latest_release {
-                    if let Some(dependencies) = latest_release.info_json.dependencies.as_ref() {
-                        let map_dependencies = |dependencies: &Vec<Dependency>| {
-                            dependencies
-                                .iter()
-                                .map(|d| {
-                                    Spans::from(format!(
-                                        "- {} {} {}",
-                                        d.name,
-                                        Equality::to_str(d.equality.clone()),
-                                        d.version
-                                            .as_ref()
-                                            .and_then(|v| Some(v.to_string()))
-                                            .unwrap_or("".to_string())
-                                    ))
-                                })
-                                .collect::<Vec<_>>()
-                        };
-                        let required_dependencies = map_dependencies(&dependencies.required);
-                        if required_dependencies.len() > 0 {
-                            text.push(Spans::from("Required Dependencies:"));
-                            text.extend(required_dependencies);
-                            text.push(Spans::from("".to_string()));
-                        }
+                    let map_dependencies = |dependencies: &Vec<Dependency>| {
+                        dependencies
+                            .iter()
+                            .map(|d| Spans::from(format!("- {} {}", d.name, d.version_req)))
+                            .collect::<Vec<_>>()
+                    };
+                    let required_dependencies =
+                        map_dependencies(&latest_release.required_dependencies());
+                    if required_dependencies.len() > 0 {
+                        text.push(Spans::from("Required Dependencies:"));
+                        text.extend(required_dependencies);
+                        text.push(Spans::from("".to_string()));
+                    }
 
-                        let optional_dependencies = map_dependencies(&dependencies.optional);
-                        if optional_dependencies.len() > 0 {
-                            text.push(Spans::from("Optional Dependencies:"));
-                            text.extend(optional_dependencies);
-                            text.push(Spans::from("".to_string()));
-                        }
+                    let optional_dependencies =
+                        map_dependencies(&latest_release.optional_dependencies());
+                    if optional_dependencies.len() > 0 {
+                        text.push(Spans::from("Optional Dependencies:"));
+                        text.extend(optional_dependencies);
+                        text.push(Spans::from("".to_string()));
+                    }
 
-                        let incompatible_dependencies =
-                            map_dependencies(&dependencies.incompatible);
-                        if incompatible_dependencies.len() > 0 {
-                            text.push(Spans::from("Incompatible Dependencies:"));
-                            text.extend(incompatible_dependencies);
-                            text.push(Spans::from("".to_string()));
-                        }
+                    let incompatible_dependencies =
+                        map_dependencies(&latest_release.incompatible_dependencies());
+                    if incompatible_dependencies.len() > 0 {
+                        text.push(Spans::from("Incompatible Dependencies:"));
+                        text.extend(incompatible_dependencies);
+                        text.push(Spans::from("".to_string()));
                     }
                 }
 
@@ -162,7 +152,10 @@ fn draw_mod_details(fml: &FML, frame: &mut Frame<impl Backend>, layout: Rect) {
                                 == old_mod_identifier.name
                             {
                                 // Load full mod information from api
-                                let mod_ = api::Registry::load_mod(&old_mod_identifier).await;
+                                let mod_ = factorio::api::registry::Registry::load_mod(
+                                    &old_mod_identifier.name,
+                                )
+                                .await;
                                 match mod_ {
                                     Err(err) => {
                                         log::error!("Couldn't load mod: {}", err)

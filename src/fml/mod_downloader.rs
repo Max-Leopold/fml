@@ -3,8 +3,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tui::widgets::Gauge;
 
-use crate::factorio::api::{Dependencies, ModIdentifier, Version};
-use crate::factorio::{api, installed_mods};
+use crate::factorio::{self, api, installed_mods};
 
 use super::install_mod_list::InstallModList;
 use super::manage_mod_list::ManageModList;
@@ -12,8 +11,7 @@ use super::manage_mod_list::ManageModList;
 #[derive(Debug, Clone)]
 pub struct ModDownloadRequest {
     pub mod_name: String,
-    pub min_version: Option<Version>,
-    pub max_version: Option<Version>,
+    pub ver_req: semver::VersionReq,
     pub username: String,
     pub token: String,
     pub mod_dir: String,
@@ -55,13 +53,12 @@ impl ModDownloader {
                                 if download_request.mod_name == "base" {
                                     continue;
                                 }
-                                let mut mod_ = api::Registry::load_mod(&ModIdentifier::new(download_request.mod_name)).await.unwrap();
+                                let mut mod_ = factorio::api::registry::Registry::load_mod(&download_request.mod_name).await.unwrap();
                                 *download_perc_clone.lock().unwrap() = 0;
                                 *currently_downloading_clone.lock().unwrap() = mod_.title.clone();
 
                                 let mut file = mod_.download_version(
-                                    download_request.min_version.as_ref(),
-                                    download_request.max_version.as_ref(),
+                                    download_request.ver_req.clone(),
                                     &download_request.username,
                                     &download_request.token,
                                     &download_request.mod_dir,
@@ -71,20 +68,14 @@ impl ModDownloader {
                                 ).await.unwrap();
 
                                 // Download all mod dependencies
-                                if let Some(release) = mod_.find_release(download_request.min_version.as_ref(), download_request.max_version.as_ref()).await.unwrap() {
+                                if let Some(release) = mod_.find_matching_release(&download_request.ver_req) {
                                     for dependency in release
-                                        .info_json
-                                        .dependencies
-                                        .as_ref()
-                                        .unwrap_or(&Dependencies::default())
-                                        .required
+                                        .required_dependencies()
                                         .iter()
                                     {
-                                        let (max_version, min_version) = dependency.get_max_and_min_version();
                                         tx.send(ModDownloadRequest {
                                             mod_name: dependency.name.clone(),
-                                            min_version,
-                                            max_version,
+                                            ver_req: dependency.version_req.clone(),
                                             username: download_request.username.clone(),
                                             token: download_request.token.clone(),
                                             mod_dir: download_request.mod_dir.clone(),
