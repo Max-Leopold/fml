@@ -29,11 +29,11 @@ pub fn handle_event(event: AppEvent, app: &mut App, tx: mpsc::UnboundedSender<Ap
             app.installing = false;
             match result {
                 Ok(install_result) => {
-                    // Build set of previously known mods with their enabled state
-                    let prev_state: HashMap<String, bool> = app
+                    // Build set of previously known mods with their enabled/pending state
+                    let prev_state: HashMap<String, (bool, bool)> = app
                         .manage_mods
                         .iter()
-                        .map(|m| (m.installed_mod.name.clone(), m.enabled))
+                        .map(|m| (m.installed_mod.name.clone(), (m.enabled, m.pending)))
                         .collect();
 
                     // Refresh manage mods from disk
@@ -41,14 +41,22 @@ pub fn handle_event(event: AppEvent, app: &mut App, tx: mpsc::UnboundedSender<Ap
                         .installed_mods
                         .into_iter()
                         .map(|m| {
-                            // Preserve existing enabled state, new mods default to enabled
-                            let enabled = prev_state.get(&m.name).copied().unwrap_or(true);
+                            let (enabled, pending) = prev_state
+                                .get(&m.name)
+                                .copied()
+                                .unwrap_or((true, true)); // new mods default to enabled + pending
                             ManageMod {
                                 installed_mod: m,
                                 enabled,
+                                pending,
                             }
                         })
                         .collect();
+
+                    // Ensure selection is valid
+                    if !app.manage_mods.is_empty() && app.manage_selected.is_none() {
+                        app.manage_selected = Some(0);
+                    }
 
                     if install_result.dependency_count > 0 {
                         app.set_status(format!(
@@ -92,6 +100,7 @@ pub fn handle_event(event: AppEvent, app: &mut App, tx: mpsc::UnboundedSender<Ap
                         ManageMod {
                             enabled,
                             installed_mod: m,
+                            pending: false,
                         }
                     })
                     .collect();
@@ -109,6 +118,30 @@ pub fn handle_event(event: AppEvent, app: &mut App, tx: mpsc::UnboundedSender<Ap
     }
 }
 
+fn save_mod_list(app: &mut App) {
+    if app.installing {
+        app.set_status("Cannot save while installing...".to_string());
+        return;
+    }
+
+    let mut mod_list =
+        ModList::load_or_create(&app.mods_dir).unwrap_or_else(|_| ModList::new());
+    for m in &app.manage_mods {
+        mod_list.set_enabled(&m.installed_mod.name, m.enabled);
+    }
+    match mod_list.save(&app.mods_dir) {
+        Ok(()) => {
+            for m in &mut app.manage_mods {
+                m.pending = false;
+            }
+            app.set_status("Saved mod-list.json".to_string());
+        }
+        Err(e) => {
+            app.set_status(format!("Failed to save: {}", e));
+        }
+    }
+}
+
 fn handle_key(key: KeyEvent, app: &mut App, tx: mpsc::UnboundedSender<AppEvent>) {
     // Quit popup takes priority
     if app.show_quit_popup {
@@ -120,6 +153,11 @@ fn handle_key(key: KeyEvent, app: &mut App, tx: mpsc::UnboundedSender<AppEvent>)
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         app.show_quit_popup = true;
         app.active_block = ActiveBlock::QuitPopup;
+        return;
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
+        save_mod_list(app);
         return;
     }
 
@@ -276,13 +314,9 @@ fn handle_search_keys(key: KeyEvent, app: &mut App) {
 fn handle_quit_popup(key: KeyEvent, app: &mut App) {
     match key.code {
         KeyCode::Char('y') => {
-            // Save mod-list.json and quit
-            let mut mod_list = ModList::load_or_create(&app.mods_dir).unwrap_or_else(|_| ModList::new());
-            for m in &app.manage_mods {
-                mod_list.set_enabled(&m.installed_mod.name, m.enabled);
-            }
-            if let Err(e) = mod_list.save(&app.mods_dir) {
-                app.set_status(format!("Failed to save mod-list.json: {}", e));
+            save_mod_list(app);
+            if app.status_message.as_ref().map_or(false, |(msg, _)| msg.starts_with("Failed")) {
+                // Save failed, cancel quit
                 app.show_quit_popup = false;
                 app.active_block = match app.tab {
                     Tab::Manage => ActiveBlock::ManageModList,

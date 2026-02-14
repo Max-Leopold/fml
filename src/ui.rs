@@ -55,26 +55,19 @@ fn draw_tabs(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn draw_manage_tab(app: &App, frame: &mut Frame, area: Rect) {
-    if app.manage_mods.is_empty() {
+    let has_pending = app.manage_mods.iter().any(|m| m.pending);
+    let saved_mods: Vec<&crate::app::ManageMod> =
+        app.manage_mods.iter().filter(|m| !m.pending).collect();
+    let pending_mods: Vec<&crate::app::ManageMod> =
+        app.manage_mods.iter().filter(|m| m.pending).collect();
+
+    if saved_mods.is_empty() && pending_mods.is_empty() {
         let msg = Paragraph::new("No mods installed")
             .style(Style::default().fg(Color::DarkGray))
             .block(Block::default().borders(Borders::ALL).title(" Installed Mods "));
         frame.render_widget(msg, area);
         return;
     }
-
-    let items: Vec<ListItem> = app
-        .manage_mods
-        .iter()
-        .map(|m| {
-            let prefix = if m.enabled { "✔ " } else { "  " };
-            let text = format!(
-                "{}{} ({})",
-                prefix, m.installed_mod.title, m.installed_mod.version
-            );
-            ListItem::new(text)
-        })
-        .collect();
 
     let is_focused = app.active_block == ActiveBlock::ManageModList;
     let border_style = if is_focused {
@@ -83,23 +76,106 @@ fn draw_manage_tab(app: &App, frame: &mut Frame, area: Rect) {
         Style::default()
     };
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Installed Mods ")
-                .border_style(border_style),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("▸ ");
+    if !has_pending {
+        // Simple case: no pending mods, render a single list
+        let items: Vec<ListItem> = app
+            .manage_mods
+            .iter()
+            .map(|m| {
+                let prefix = if m.enabled { "✔ " } else { "  " };
+                let text = format!(
+                    "{}{} ({})",
+                    prefix, m.installed_mod.title, m.installed_mod.version
+                );
+                ListItem::new(text)
+            })
+            .collect();
 
-    let mut state = ListState::default();
-    state.select(app.manage_selected);
-    frame.render_stateful_widget(list, area, &mut state);
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Installed Mods ")
+                    .border_style(border_style),
+            )
+            .highlight_style(
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("▸ ");
+
+        let mut state = ListState::default();
+        state.select(app.manage_selected);
+        frame.render_stateful_widget(list, area, &mut state);
+    } else {
+        // We have pending mods — build a combined list with a separator
+        let mut items: Vec<ListItem> = Vec::new();
+        let mut index_map: Vec<usize> = Vec::new(); // maps list row -> manage_mods index
+
+        // Saved mods first
+        for (i, m) in app.manage_mods.iter().enumerate() {
+            if m.pending {
+                continue;
+            }
+            let prefix = if m.enabled { "✔ " } else { "  " };
+            let text = format!(
+                "{}{} ({})",
+                prefix, m.installed_mod.title, m.installed_mod.version
+            );
+            items.push(ListItem::new(text));
+            index_map.push(i);
+        }
+
+        // Separator
+        let sep_text = Line::from(Span::styled(
+            "── Newly Installed (Ctrl+S to save) ──",
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
+        ));
+        items.push(ListItem::new(sep_text));
+
+        // Pending mods
+        for (i, m) in app.manage_mods.iter().enumerate() {
+            if !m.pending {
+                continue;
+            }
+            let prefix = if m.enabled { "✔ " } else { "  " };
+            let text = Line::from(Span::styled(
+                format!(
+                    "{}{} ({})",
+                    prefix, m.installed_mod.title, m.installed_mod.version
+                ),
+                Style::default().fg(Color::Cyan),
+            ));
+            items.push(ListItem::new(text));
+            index_map.push(i);
+        }
+
+        // Convert manage_selected (index into manage_mods) to display row
+        let display_selected = app.manage_selected.and_then(|sel| {
+            index_map.iter().position(|&idx| idx == sel)
+        });
+
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Installed Mods ")
+                    .border_style(border_style),
+            )
+            .highlight_style(
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("▸ ");
+
+        let mut state = ListState::default();
+        state.select(display_selected);
+        frame.render_stateful_widget(list, area, &mut state);
+    }
 }
 
 fn draw_install_tab(app: &App, frame: &mut Frame, area: Rect) {
@@ -176,10 +252,10 @@ fn draw_install_tab(app: &App, frame: &mut Frame, area: Rect) {
             } else {
                 "  "
             };
-            let text = format!("{}{} — {}", prefix, m.title, m.summary);
-            // Truncate long summaries (char-aware to avoid splitting multi-byte chars)
+            let text = format!("{}{}", prefix, m.title);
+            // Truncate long titles (char-aware to avoid splitting multi-byte chars)
             let max_len = (chunks[1].width as usize).saturating_sub(4);
-            let display = if text.len() > max_len {
+            let display = if text.chars().count() > max_len {
                 let truncated: String = text.chars().take(max_len.saturating_sub(1)).collect();
                 format!("{}…", truncated)
             } else {
@@ -221,10 +297,10 @@ fn draw_status_bar(app: &App, frame: &mut Frame, area: Rect) {
     } else {
         let hints = match app.tab {
             Tab::Manage => {
-                "Tab: switch tabs | ↑↓: navigate | Enter: toggle | d: delete | Ctrl+C: quit"
+                "Tab: switch tabs | ↑↓: navigate | Enter: toggle | d: delete | Ctrl+S: save | Ctrl+C: quit"
             }
             Tab::Install => {
-                "Tab: switch tabs | ↑↓: navigate | Enter: install | /: search | Ctrl+C: quit"
+                "Tab: switch tabs | ↑↓: navigate | Enter: install | /: search | Ctrl+S: save | Ctrl+C: quit"
             }
         };
         Span::styled(hints, Style::default().fg(Color::DarkGray))

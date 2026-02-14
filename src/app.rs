@@ -21,6 +21,7 @@ pub enum ActiveBlock {
 pub struct ManageMod {
     pub installed_mod: InstalledMod,
     pub enabled: bool,
+    pub pending: bool,
 }
 
 pub struct App {
@@ -94,12 +95,34 @@ impl App {
             .any(|m| m.installed_mod.name == mod_name)
     }
 
+    /// Returns manage_mods indices in visual order: saved mods first, then pending.
+    pub fn manage_display_order(&self) -> Vec<usize> {
+        let mut order: Vec<usize> = Vec::new();
+        for (i, m) in self.manage_mods.iter().enumerate() {
+            if !m.pending {
+                order.push(i);
+            }
+        }
+        for (i, m) in self.manage_mods.iter().enumerate() {
+            if m.pending {
+                order.push(i);
+            }
+        }
+        order
+    }
+
     pub fn move_up(&mut self) {
         match self.active_block {
             ActiveBlock::ManageModList => {
+                let order = self.manage_display_order();
+                if order.is_empty() {
+                    return;
+                }
                 if let Some(sel) = self.manage_selected {
-                    if sel > 0 {
-                        self.manage_selected = Some(sel - 1);
+                    if let Some(pos) = order.iter().position(|&idx| idx == sel) {
+                        if pos > 0 {
+                            self.manage_selected = Some(order[pos - 1]);
+                        }
                     }
                 }
             }
@@ -117,12 +140,18 @@ impl App {
     pub fn move_down(&mut self) {
         match self.active_block {
             ActiveBlock::ManageModList => {
-                let len = self.manage_mods.len();
-                if len > 0 {
-                    let sel = self.manage_selected.unwrap_or(0);
-                    if sel < len - 1 {
-                        self.manage_selected = Some(sel + 1);
+                let order = self.manage_display_order();
+                if order.is_empty() {
+                    return;
+                }
+                if let Some(sel) = self.manage_selected {
+                    if let Some(pos) = order.iter().position(|&idx| idx == sel) {
+                        if pos < order.len() - 1 {
+                            self.manage_selected = Some(order[pos + 1]);
+                        }
                     }
+                } else {
+                    self.manage_selected = Some(order[0]);
                 }
             }
             ActiveBlock::InstallModList => {
