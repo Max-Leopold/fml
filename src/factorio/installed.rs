@@ -147,8 +147,6 @@ pub fn delete_mod(mod_name: &str, version: &semver::Version, mods_dir: &str) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn delete_mod_precise_matching() {
         // Verify that delete_mod("bob", ...) would NOT match "boblogistics_1.0.0.zip"

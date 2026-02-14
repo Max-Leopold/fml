@@ -16,6 +16,8 @@ pub fn handle_event(event: AppEvent, app: &mut App, tx: mpsc::UnboundedSender<Ap
                 app.loading = false;
                 if app.install_mods.is_empty() {
                     app.set_status("No mods found for this Factorio version".to_string());
+                } else {
+                    app.install_selected = Some(0);
                 }
             }
             Err(e) => {
