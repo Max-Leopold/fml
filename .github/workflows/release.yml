@@ -4,28 +4,41 @@ on:
   release:
     types: [created]
 
+permissions:
+  contents: write
+
 jobs:
   release:
     name: release ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-pc-windows-gnu
-            archive: zip
           - target: x86_64-unknown-linux-musl
-            archive: tar.gz tar.xz tar.zst
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
           - target: x86_64-apple-darwin
-            archive: zip
+            os: macos-13
+          - target: aarch64-apple-darwin
+            os: macos-latest
     steps:
-      - uses: actions/checkout@master
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.0
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl-tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get install -y musl-tools
+
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: fml
+          target: ${{ matrix.target }}
+          include: README.md,LICENSE
+          archive: ${{ matrix.target == 'x86_64-pc-windows-msvc' && 'zip' || 'tar.gz' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          RUSTTARGET: ${{ matrix.target }}
-          EXTRA_FILES: "README.md LICENSE"
-          ARCHIVE_TYPES: ${{ matrix.archive }}
-          MINIFY: "yes"
