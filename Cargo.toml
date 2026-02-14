@@ -1,32 +1,17 @@
 [package]
 name = "fml"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-log = "0.4.17"
-reqwest = { version="0.11.12", features = ["json"] }
-serde = { version="1.0.145", features=["derive"] }
-serde_json = "1.0.87"
-simplelog = "0.12.0"
-tui = "0.19.0"
-crossterm = { version="0.25", features = ["event-stream"] }
-tokio = { version = "1.21.2", features = ["full"] }
-anyhow = "1.0.66"
-better-panic = "0.3.0"
-dirs = "4.0.0"
-textwrap = "0.16.0"
-pulldown-cmark = "0.9.2"
-zip = "0.6.3"
-serde_with = "2.0.1"
-regex = "1.6.0"
-lazy_static = "1.4.0"
-fs2 = "0.4.3"
-toml = "0.7.2"
-clap = { version = "4.1.8", features = ["derive"] }
-unicode-width = "0.1.10"
-futures-util = "0.3.26"
-futures = "0.3.26"
-semver = { version = "1.0.17", features = ["serde"] }
+ratatui = "0.29"
+crossterm = "0.28"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+semver = { version = "1", features = ["serde"] }
+zip = "2"
+clap = { version = "4", features = ["derive"] }
+regex = "1"
