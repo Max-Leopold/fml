@@ -182,6 +182,23 @@ pub async fn download_mod(
         .with_context(|| format!("Failed to write file: {}", file_path.display()))?;
     drop(file);
 
+    // Verify SHA1 checksum if provided
+    if !release.sha1.is_empty() {
+        use sha1_smol::Sha1;
+        let mut hasher = Sha1::new();
+        hasher.update(&bytes);
+        let digest = hasher.digest().to_string();
+        if digest != release.sha1 {
+            let _ = std::fs::remove_file(&file_path);
+            bail!(
+                "SHA1 mismatch for '{}': expected {}, got {}",
+                release.file_name,
+                release.sha1,
+                digest
+            );
+        }
+    }
+
     // Verify it's a valid zip
     match zip::ZipArchive::new(std::fs::File::open(&file_path)?) {
         Ok(_) => Ok(()),
