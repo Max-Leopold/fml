@@ -177,10 +177,11 @@ fn draw_install_tab(app: &App, frame: &mut Frame, area: Rect) {
                 "  "
             };
             let text = format!("{}{} — {}", prefix, m.title, m.summary);
-            // Truncate long summaries
+            // Truncate long summaries (char-aware to avoid splitting multi-byte chars)
             let max_len = (chunks[1].width as usize).saturating_sub(4);
             let display = if text.len() > max_len {
-                format!("{}…", &text[..max_len.saturating_sub(1)])
+                let truncated: String = text.chars().take(max_len.saturating_sub(1)).collect();
+                format!("{}…", truncated)
             } else {
                 text
             };
