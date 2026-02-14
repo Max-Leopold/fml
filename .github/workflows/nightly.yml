@@ -1,0 +1,97 @@
+name: Nightly release
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-release
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare nightly release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete existing nightly release and tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Create nightly tag
+        run: |
+          git tag -f nightly
+          git push -f origin nightly
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl-tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../fml-${{ matrix.target }}.tar.gz fml
+          cd ../../..
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../fml-${{ matrix.target }}.zip fml.exe
+          cd ../../..
+
+      - name: Upload to nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: Nightly (latest main)
+          body: |
+            Rolling pre-release built from the latest `main` branch.
+
+            **Commit:** ${{ github.sha }}
+            **Date:** ${{ github.event.head_commit.timestamp }}
+
+            > ⚠️ This is an unstable pre-release. For the latest stable version, see the [latest release](https://github.com/${{ github.repository }}/releases/latest).
+
+            Install with:
+            ```sh
+            FML_VERSION=nightly curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh
+            ```
+          prerelease: true
+          files: |
+            fml-${{ matrix.target }}.tar.gz
+            fml-${{ matrix.target }}.zip

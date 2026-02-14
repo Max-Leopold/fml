@@ -92,10 +92,11 @@ get_version() {
         fi
     fi
 
-    # Validate version format (must start with 'v' followed by a digit)
+    # Validate version format
     case "$VERSION" in
-        v[0-9]*)  ;; # valid
-        *)        error "invalid version format: '${VERSION}' (expected e.g. 'v0.1.0')" ;;
+        v[0-9]*)  ;; # tagged release, e.g. v0.1.0
+        nightly)  ;; # latest main build
+        *)        error "invalid version format: '${VERSION}' (expected e.g. 'v0.1.0' or 'nightly')" ;;
     esac
 
     info "Installing fml ${VERSION}"
