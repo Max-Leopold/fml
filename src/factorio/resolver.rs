@@ -20,8 +20,8 @@ pub async fn resolve<F, Fut>(
     fetch_fn: &F,
 ) -> Result<ResolveResult>
 where
-    F: Fn(String) -> Fut,
-    Fut: Future<Output = Result<Mod>>,
+    F: Fn(String) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<Mod>> + Send,
 {
     let mut to_download: Vec<(String, Release)> = Vec::new();
     let mut visited: HashSet<String> = HashSet::new();
@@ -51,10 +51,10 @@ fn resolve_recursive<'a, F, Fut>(
     to_download: &'a mut Vec<(String, Release)>,
     visited: &'a mut HashSet<String>,
     root_mod: &'a str,
-) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + 'a>>
+) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
 where
-    F: Fn(String) -> Fut,
-    Fut: Future<Output = Result<Mod>> + 'a,
+    F: Fn(String) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<Mod>> + Send + 'a,
 {
     Box::pin(async move {
     // Skip base — it's the game itself
