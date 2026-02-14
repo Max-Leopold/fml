@@ -15,6 +15,19 @@ configure mods without having to copy files between machines.
 
 ## Getting Started
 
+### Quick Install (Linux / macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Max-Leopold/fml/main/install.sh | sh
+```
+
+To install a specific version:
+```bash
+FML_VERSION=v0.0.1 curl -fsSL https://raw.githubusercontent.com/Max-Leopold/fml/main/install.sh | sh
+```
+
+### Manual Download
+
 You can find compiled binaries for every platform in the [release](https://github.com/Max-Leopold/fml/releases) section.
 Download the archive for your corresponding platform, unzip it and add the included binary to your `PATH`.
 
