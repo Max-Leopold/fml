@@ -1,8 +1,9 @@
 name: Build binaries for release
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -39,6 +40,5 @@ jobs:
           bin: fml
           target: ${{ matrix.target }}
           include: README.md,LICENSE
-          archive: ${{ matrix.target == 'x86_64-pc-windows-msvc' && 'zip' || 'tar.gz' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
